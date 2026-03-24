@@ -144,23 +144,23 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
             (site.traditionalAuthority ?? '').toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
     
-    // Sort: unsynced sites first, then synced sites by training_point_id
+    // Sort: unsynced sites first, then synced sites by training_point_id in descending order
     filtered.sort((a, b) {
       // If one is unsynced and the other is synced, unsynced comes first
       if (a.sIsSync == 0 && b.sIsSync == 1) return -1;
       if (a.sIsSync == 1 && b.sIsSync == 0) return 1;
       
-      // If both are unsynced, sort by offline_id (or keep original order)
+      // If both are unsynced, sort by offline_id in descending order (newer items first)
       if (a.sIsSync == 0 && b.sIsSync == 0) {
         final aId = a.offlineId ?? 0;
         final bId = b.offlineId ?? 0;
-        return bId.compareTo(aId); // Newer unsynced items first (higher offline_id)
+        return bId.compareTo(aId); // Descending order
       }
       
-      // If both are synced, sort by training_point_id
+      // If both are synced, sort by training_point_id in descending order
       final aId = a.trainingPointId ?? 0;
       final bId = b.trainingPointId ?? 0;
-      return aId.compareTo(bId); // Ascending order by training_point_id
+      return bId.compareTo(aId); // Descending order
     });
     
     return filtered;
