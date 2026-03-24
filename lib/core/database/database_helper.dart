@@ -1,0 +1,581 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'dart:developer' as developer;
+
+class DatabaseHelper {
+  static DatabaseHelper? _instance;
+  static Database? _database;
+
+  static const String _databaseName = 'irise.db';
+  static const int _databaseVersion = 7;
+
+  DatabaseHelper._internal();
+
+  static DatabaseHelper get instance {
+    _instance ??= DatabaseHelper._internal();
+    return _instance!;
+  }
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDatabase();
+    return _database!;
+  }
+
+  Future<Database> _initDatabase() async {
+    final databasePath = await getDatabasesPath();
+    final path = join(databasePath, _databaseName);
+
+    developer.log('Initializing database at: $path', name: 'DatabaseHelper');
+
+    return await openDatabase(
+      path,
+      version: _databaseVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    developer.log('Creating database tables...', name: 'DatabaseHelper');
+
+    // Create training_sites table with proper auto-increment id
+    await db.execute('''
+      CREATE TABLE training_sites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        training_point_id INTEGER UNIQUE,
+        is_parent TEXT DEFAULT 'no',
+        m_training_point_id INTEGER,
+        training_site TEXT,
+        road_access TEXT DEFAULT 'no',
+        village_head_name TEXT,
+        gvh_name TEXT,
+        district TEXT,
+        traditional_authority TEXT,
+        total_people INTEGER,
+        house_holds_count INTEGER,
+        cookstoves_count INTEGER,
+        house_hold_radius INTEGER,
+        latitude REAL,
+        longitude REAL,
+        s_is_sync INTEGER DEFAULT 0,
+        training_status TEXT,
+        conduct_training_date TEXT,
+        number_of_people_present INTEGER,
+        created_by TEXT,
+        modified_by TEXT,
+        created_date TEXT,
+        modified_date TEXT,
+        status TEXT DEFAULT 'active',
+        offline_id INTEGER UNIQUE,
+        server_time TEXT
+      )
+    ''');
+
+    // Create beneficiaries table
+    await db.execute('''
+      CREATE TABLE beneficiaries (
+        beneficiary_id INTEGER PRIMARY KEY,
+        training_point_id INTEGER,
+        first_name TEXT,
+        last_name TEXT,
+        gender TEXT,
+        age INTEGER,
+        phone_number TEXT,
+        national_id TEXT,
+        household_size INTEGER,
+        cookstoves_received INTEGER,
+        s_is_sync INTEGER DEFAULT 0,
+        created_by TEXT,
+        modified_by TEXT,
+        created_date TEXT,
+        modified_date TEXT,
+        status TEXT DEFAULT 'active',
+        offline_id INTEGER,
+        server_time TEXT,
+        FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
+      )
+    ''');
+
+    // Create trainings table
+    await db.execute('''
+      CREATE TABLE trainings (
+        training_id INTEGER PRIMARY KEY,
+        training_point_id INTEGER,
+        training_date TEXT,
+        trainer_name TEXT,
+        participants_count INTEGER,
+        males_count INTEGER,
+        females_count INTEGER,
+        training_type TEXT,
+        training_notes TEXT,
+        s_is_sync INTEGER DEFAULT 0,
+        created_by TEXT,
+        modified_by TEXT,
+        created_date TEXT,
+        modified_date TEXT,
+        status TEXT DEFAULT 'active',
+        offline_id INTEGER,
+        server_time TEXT,
+        FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
+      )
+    ''');
+
+    // Create sync_queue table for offline operations
+    await db.execute('''
+      CREATE TABLE sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_date TEXT NOT NULL,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT
+      )
+    ''');
+
+    // Create districts table
+    await db.execute('''
+      CREATE TABLE districts (
+        id INTEGER PRIMARY KEY,
+        district_name TEXT,
+        slug TEXT,
+        region TEXT,
+        status TEXT
+      )
+    ''');
+
+    // Create authorities table
+    await db.execute('''
+      CREATE TABLE authorities (
+        id INTEGER PRIMARY KEY,
+        authority_name TEXT,
+        slug TEXT,
+        district_id INTEGER,
+        status TEXT
+      )
+    ''');
+
+    developer.log('Database tables created successfully', name: 'DatabaseHelper');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    developer.log(
+      'Upgrading database from version $oldVersion to $newVersion',
+      name: 'DatabaseHelper',
+    );
+    
+    // Handle database migrations here
+    if (oldVersion < 2) {
+      // Migration from version 1 to 2: Change offline_id from TEXT to INTEGER
+      developer.log('Migrating offline_id columns to INTEGER', name: 'DatabaseHelper');
+      
+      // For training_sites table
+      await db.execute('''
+        CREATE TABLE training_sites_new (
+          training_point_id INTEGER PRIMARY KEY,
+          is_parent TEXT DEFAULT 'no',
+          m_training_point_id INTEGER,
+          training_site TEXT,
+          road_access TEXT DEFAULT 'no',
+          village_head_name TEXT,
+          gvh_name TEXT,
+          district TEXT,
+          traditional_authority TEXT,
+          total_people INTEGER,
+          house_holds_count INTEGER,
+          cookstoves_count INTEGER,
+          house_hold_radius INTEGER,
+          latitude REAL,
+          longitude REAL,
+          s_is_sync INTEGER DEFAULT 0,
+          training_status TEXT,
+          created_by TEXT,
+          modified_by TEXT,
+          created_date TEXT,
+          modified_date TEXT,
+          status TEXT DEFAULT 'active',
+          offline_id INTEGER,
+          server_time TEXT
+        )
+      ''');
+      
+      // Copy data, converting offline_id to INTEGER
+      await db.execute('''
+        INSERT INTO training_sites_new 
+        SELECT 
+          training_point_id, is_parent, m_training_point_id, training_site, 
+          road_access, village_head_name, gvh_name, district, traditional_authority,
+          total_people, house_holds_count, cookstoves_count, house_hold_radius,
+          latitude, longitude, s_is_sync, training_status, created_by, modified_by,
+          created_date, modified_date, status,
+          CASE 
+            WHEN offline_id IS NULL THEN NULL
+            WHEN offline_id = '' THEN NULL
+            ELSE CAST(offline_id AS INTEGER)
+          END as offline_id,
+          server_time
+        FROM training_sites
+      ''');
+      
+      // Drop old table and rename new one
+      await db.execute('DROP TABLE training_sites');
+      await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+      
+      // Update beneficiaries table
+      await db.execute('''
+        CREATE TABLE beneficiaries_new (
+          beneficiary_id INTEGER PRIMARY KEY,
+          training_point_id INTEGER,
+          first_name TEXT,
+          last_name TEXT,
+          gender TEXT,
+          age INTEGER,
+          phone_number TEXT,
+          national_id TEXT,
+          household_size INTEGER,
+          cookstoves_received INTEGER,
+          s_is_sync INTEGER DEFAULT 0,
+          created_by TEXT,
+          modified_by TEXT,
+          created_date TEXT,
+          modified_date TEXT,
+          status TEXT DEFAULT 'active',
+          offline_id INTEGER,
+          server_time TEXT,
+          FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
+        )
+      ''');
+      
+      await db.execute('''
+        INSERT INTO beneficiaries_new 
+        SELECT 
+          beneficiary_id, training_point_id, first_name, last_name, gender, age, 
+          phone_number, national_id, household_size, cookstoves_received, s_is_sync,
+          created_by, modified_by, created_date, modified_date, status,
+          CASE 
+            WHEN offline_id IS NULL THEN NULL
+            WHEN offline_id = '' THEN NULL
+            ELSE CAST(offline_id AS INTEGER)
+          END as offline_id,
+          server_time
+        FROM beneficiaries
+      ''');
+      
+      await db.execute('DROP TABLE beneficiaries');
+      await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+      
+      // Update trainings table
+      await db.execute('''
+        CREATE TABLE trainings_new (
+          training_id INTEGER PRIMARY KEY,
+          training_point_id INTEGER,
+          training_date TEXT,
+          trainer_name TEXT,
+          participants_count INTEGER,
+          males_count INTEGER,
+          females_count INTEGER,
+          training_type TEXT,
+          training_notes TEXT,
+          s_is_sync INTEGER DEFAULT 0,
+          created_by TEXT,
+          modified_by TEXT,
+          created_date TEXT,
+          modified_date TEXT,
+          status TEXT DEFAULT 'active',
+          offline_id INTEGER,
+          server_time TEXT,
+          FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
+        )
+      ''');
+      
+      await db.execute('''
+        INSERT INTO trainings_new 
+        SELECT 
+          training_id, training_point_id, training_date, trainer_name, participants_count, 
+          males_count, females_count, training_type, training_notes, s_is_sync,
+          created_by, modified_by, created_date, modified_date, status,
+          CASE 
+            WHEN offline_id IS NULL THEN NULL
+            WHEN offline_id = '' THEN NULL
+            ELSE CAST(offline_id AS INTEGER)
+          END as offline_id,
+          server_time
+        FROM trainings
+      ''');
+      
+      await db.execute('DROP TABLE trainings');
+      await db.execute('ALTER TABLE trainings_new RENAME TO trainings');
+      
+      developer.log('Database migration to version 2 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 3) {
+      // Migration from version 2 to 3: Fix any remaining schema issues
+      developer.log('Applying version 3 migration fixes', name: 'DatabaseHelper');
+      
+      // This migration will recreate tables with correct schema if needed
+      // The database will be recreated cleanly
+      developer.log('Database migration to version 3 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 4) {
+      // Migration from version 3 to 4: Add created_by_name and modified_by_name columns
+      developer.log('Adding created_by_name and modified_by_name columns', name: 'DatabaseHelper');
+      
+      try {
+        // Add new columns to training_sites table
+        await db.execute('ALTER TABLE training_sites ADD COLUMN created_by_name TEXT');
+        await db.execute('ALTER TABLE training_sites ADD COLUMN modified_by_name TEXT');
+        
+        developer.log('Successfully added name columns to training_sites table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error adding columns (they might already exist): $e', name: 'DatabaseHelper');
+        // Columns might already exist, continue
+      }
+      
+      developer.log('Database migration to version 4 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 5) {
+      // Migration from version 4 to 5: Add districts and authorities tables
+      developer.log('Adding districts and authorities tables', name: 'DatabaseHelper');
+      
+      try {
+        // Create districts table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS districts (
+            id INTEGER PRIMARY KEY,
+            district_name TEXT,
+            slug TEXT,
+            region TEXT,
+            status TEXT
+          )
+        ''');
+        
+        // Create authorities table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS authorities (
+            id INTEGER PRIMARY KEY,
+            authority_name TEXT,
+            slug TEXT,
+            district_id INTEGER,
+            status TEXT
+          )
+        ''');
+        
+        developer.log('Successfully added districts and authorities tables', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error adding tables (they might already exist): $e', name: 'DatabaseHelper');
+      }
+      
+      developer.log('Database migration to version 5 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 6) {
+      // Migration from version 5 to 6: Add auto-increment id column and make training_point_id unique
+      developer.log('Migrating to version 6: Adding auto-increment id column', name: 'DatabaseHelper');
+      
+      try {
+        // Create new training_sites table with proper schema
+        await db.execute('''
+          CREATE TABLE training_sites_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            training_point_id INTEGER UNIQUE,
+            is_parent TEXT DEFAULT 'no',
+            m_training_point_id INTEGER,
+            training_site TEXT,
+            road_access TEXT DEFAULT 'no',
+            village_head_name TEXT,
+            gvh_name TEXT,
+            district TEXT,
+            traditional_authority TEXT,
+            total_people INTEGER,
+            house_holds_count INTEGER,
+            cookstoves_count INTEGER,
+            house_hold_radius INTEGER,
+            latitude REAL,
+            longitude REAL,
+            s_is_sync INTEGER DEFAULT 0,
+            training_status TEXT,
+            created_by TEXT,
+            modified_by TEXT,
+            created_by_name TEXT,
+            modified_by_name TEXT,
+            created_date TEXT,
+            modified_date TEXT,
+            status TEXT DEFAULT 'active',
+            offline_id INTEGER UNIQUE,
+            server_time TEXT
+          )
+        ''');
+        
+        // Copy data from old table to new table
+        // The id column will be auto-generated
+        await db.execute('''
+          INSERT INTO training_sites_new (
+            training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status, created_by, modified_by,
+            created_by_name, modified_by_name, created_date, modified_date, status,
+            offline_id, server_time
+          )
+          SELECT 
+            training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status, created_by, modified_by,
+            created_by_name, modified_by_name, created_date, modified_date, status,
+            offline_id, server_time
+          FROM training_sites
+        ''');
+        
+        // Drop old table and rename new one
+        await db.execute('DROP TABLE training_sites');
+        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+        
+        developer.log('Successfully migrated training_sites table to version 6', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 6 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 6 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 7) {
+      // Migration from version 6 to 7: Add conduct_training_date and number_of_people_present, remove created_by_name and modified_by_name
+      developer.log('Migrating to version 7: Updating training_sites schema', name: 'DatabaseHelper');
+      
+      try {
+        // Create new training_sites table with updated schema
+        await db.execute('''
+          CREATE TABLE training_sites_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            training_point_id INTEGER UNIQUE,
+            is_parent TEXT DEFAULT 'no',
+            m_training_point_id INTEGER,
+            training_site TEXT,
+            road_access TEXT DEFAULT 'no',
+            village_head_name TEXT,
+            gvh_name TEXT,
+            district TEXT,
+            traditional_authority TEXT,
+            total_people INTEGER,
+            house_holds_count INTEGER,
+            cookstoves_count INTEGER,
+            house_hold_radius INTEGER,
+            latitude REAL,
+            longitude REAL,
+            s_is_sync INTEGER DEFAULT 0,
+            training_status TEXT,
+            conduct_training_date TEXT,
+            number_of_people_present INTEGER,
+            created_by TEXT,
+            modified_by TEXT,
+            created_date TEXT,
+            modified_date TEXT,
+            status TEXT DEFAULT 'active',
+            offline_id INTEGER UNIQUE,
+            server_time TEXT
+          )
+        ''');
+        
+        // Copy data from old table to new table (excluding created_by_name and modified_by_name)
+        await db.execute('''
+          INSERT INTO training_sites_new (
+            training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status,
+            created_by, modified_by, created_date, modified_date, status,
+            offline_id, server_time
+          )
+          SELECT 
+            training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status,
+            created_by, modified_by, created_date, modified_date, status,
+            offline_id, server_time
+          FROM training_sites
+        ''');
+        
+        // Drop old table and rename new one
+        await db.execute('DROP TABLE training_sites');
+        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+        
+        developer.log('Successfully migrated training_sites table to version 7', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 7 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 7 completed', name: 'DatabaseHelper');
+    }
+  }
+
+  // Clear all data (useful for logout or reset)
+  Future<void> clearAllData() async {
+    final db = await database;
+    await db.delete('training_sites');
+    await db.delete('beneficiaries');
+    await db.delete('trainings');
+    await db.delete('sync_queue');
+    await db.delete('districts');
+    await db.delete('authorities');
+    developer.log('All data cleared from database', name: 'DatabaseHelper');
+  }
+
+  // Reset database completely (delete and recreate)
+  Future<void> resetDatabase() async {
+    try {
+      // Close current database connection
+      if (_database != null) {
+        await _database!.close();
+        _database = null;
+      }
+      
+      // Delete the database file
+      final databasePath = await getDatabasesPath();
+      final path = join(databasePath, _databaseName);
+      await deleteDatabase(path);
+      
+      developer.log('Database file deleted and will be recreated', name: 'DatabaseHelper');
+      
+      // The database will be recreated on next access
+    } catch (e) {
+      developer.log('Error resetting database: $e', name: 'DatabaseHelper');
+      rethrow;
+    }
+  }
+
+  // Clear only training sites table
+  Future<void> clearTrainingSites() async {
+    final db = await database;
+    await db.delete('training_sites');
+    developer.log('Training sites table cleared', name: 'DatabaseHelper');
+  }
+
+  // Close database
+  Future<void> close() async {
+    final db = await database;
+    await db.close();
+    _database = null;
+  }
+
+  // Get database size
+  Future<int> getDatabaseSize() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT 
+        (SELECT COUNT(*) FROM training_sites) as training_sites_count,
+        (SELECT COUNT(*) FROM beneficiaries) as beneficiaries_count,
+        (SELECT COUNT(*) FROM trainings) as trainings_count,
+        (SELECT COUNT(*) FROM sync_queue) as sync_queue_count
+    ''');
+    return result.length;
+  }
+}
