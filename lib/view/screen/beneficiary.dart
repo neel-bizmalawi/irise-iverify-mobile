@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:irise/route/app_routes.dart';
+import 'package:irise/data/repositories/beneficiary_repository.dart';
+import 'package:irise/data/models/beneficiary.dart';
+import 'package:irise/data/services/data_service.dart';
+import 'dart:developer' as developer;
 
 class BeneficiaryListScreen extends StatefulWidget {
   const BeneficiaryListScreen({super.key});
@@ -7,78 +13,259 @@ class BeneficiaryListScreen extends StatefulWidget {
   State<BeneficiaryListScreen> createState() => _BeneficiaryListScreenState();
 }
 
-class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
+class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _beneficiaryRepo = BeneficiaryRepository();
+  final _dataService = DataService();
+  
   String _searchQuery = '';
+  List<Beneficiary> _beneficiaries = [];
+  bool _isLoading = true;
+  bool _hasLoadedOnce = false;
+  bool _hasInitialFetch = false;
 
-  final List<Map<String, dynamic>> _beneficiaries = [
-    {
-      'name': 'Abraham Chirwa',
-      'userId': '30732',
-      'nationalId': 'QQPPOO131',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Ackim Tembo',
-      'userId': '30684',
-      'nationalId': 'SSDDYY061',
-      'synced': false,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Ackim',
-      'userId': '30912',
-      'nationalId': 'QQSSPP001',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Adam',
-      'userId': '30730',
-      'nationalId': 'WWSSPP980',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Adamson',
-      'userId': '30707',
-      'nationalId': 'SSPYDD890',
-      'synced': false,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Adris',
-      'userId': '30730',
-      'nationalId': 'WWSSPP980',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Alex',
-      'userId': '30730',
-      'nationalId': 'WWSSPP980',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-    {
-      'name': 'Mike',
-      'userId': '30730',
-      'nationalId': 'WWSSPP980',
-      'synced': true,
-      'missing': ['National ID', 'Signature'],
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkInitialFetch();
+  }
 
-  List<Map<String, dynamic>> get _filtered => _beneficiaries
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Reload when app comes to foreground
+    if (state == AppLifecycleState.resumed && _hasLoadedOnce) {
+      developer.log('App resumed, reloading beneficiaries...', name: 'BeneficiaryList');
+      _loadBeneficiaries();
+    }
+  }
+  
+  Future<void> _checkInitialFetch() async {
+    setState(() => _isLoading = true);
+    try {
+      // Check if there are any beneficiaries in the database
+      final beneficiaries = await _beneficiaryRepo.getAll();
+      setState(() {
+        _hasInitialFetch = beneficiaries.isNotEmpty;
+        _isLoading = false;
+      });
+      
+      if (_hasInitialFetch) {
+        _loadBeneficiaries();
+      }
+    } catch (e) {
+      developer.log('Error checking initial fetch: $e', name: 'BeneficiaryList');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Always reload data when this screen becomes the current route
+    // This ensures we pick up any changes made in other screens (like EditHouseholdScreen)
+    final route = ModalRoute.of(context);
+    if (route != null && route.isCurrent && _hasLoadedOnce) {
+      developer.log('Screen became active, reloading beneficiaries...', name: 'BeneficiaryList');
+      // Use Future.microtask to avoid calling setState during build
+      Future.microtask(() => _loadBeneficiaries());
+    }
+  }
+
+  Future<void> _loadBeneficiaries() async {
+    setState(() => _isLoading = true);
+    try {
+      developer.log('Loading beneficiaries from database...', name: 'BeneficiaryList');
+      final beneficiaries = await _beneficiaryRepo.getAll();
+      developer.log('Loaded ${beneficiaries.length} beneficiaries', name: 'BeneficiaryList');
+      
+      // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
+      // Within each group, sort by beneficiary_id descending
+      beneficiaries.sort((a, b) {
+        final aSync = a.sIsSync ?? 0;
+        final bSync = b.sIsSync ?? 0;
+        
+        // If sync status is different, unsynced (0) comes first
+        if (aSync != bSync) {
+          return aSync.compareTo(bSync);
+        }
+        
+        // If same sync status, sort by beneficiary_id descending (highest first)
+        // For unsynced items without beneficiary_id, use offline_id
+        final aBeneficiaryId = a.beneficiaryId ?? a.offlineId ?? 0;
+        final bBeneficiaryId = b.beneficiaryId ?? b.offlineId ?? 0;
+        return bBeneficiaryId.compareTo(aBeneficiaryId);
+      });
+      
+      // Log first few beneficiaries for debugging
+      if (beneficiaries.isNotEmpty) {
+        developer.log('========================================', name: 'BeneficiaryList');
+        developer.log('Top beneficiaries after sorting (NOT SYNCED first, then by beneficiary_id DESC):', name: 'BeneficiaryList');
+        for (var i = 0; i < (beneficiaries.length > 5 ? 5 : beneficiaries.length); i++) {
+          final b = beneficiaries[i];
+          developer.log(
+            '[$i] ${b.firstName} ${b.lastName} | Beneficiary_ID: ${b.beneficiaryId ?? 'offline:${b.offlineId}'} | Synced: ${b.sIsSync == 1 ? 'YES' : 'NO'}',
+            name: 'BeneficiaryList',
+          );
+        }
+        developer.log('========================================', name: 'BeneficiaryList');
+      }
+      
+      setState(() {
+        _beneficiaries = beneficiaries;
+        _isLoading = false;
+        _hasLoadedOnce = true;
+      });
+    } catch (e) {
+      developer.log('Error loading beneficiaries: $e', name: 'BeneficiaryList');
+      setState(() {
+        _isLoading = false;
+        _hasLoadedOnce = true;
+      });
+    }
+  }
+
+  List<Beneficiary> get _filtered => _beneficiaries
       .where((e) =>
-          e['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          e['nationalId'].toLowerCase().contains(_searchQuery.toLowerCase()))
+          (e.firstName ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (e.lastName ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (e.nationalId ?? '').toLowerCase().contains(_searchQuery.toLowerCase()))
       .toList();
+
+  int get _totalCount => _beneficiaries.length;
+  int get _syncedCount => _beneficiaries.where((b) => b.sIsSync == 1).length;
+  int get _unsyncedCount => _beneficiaries.where((b) => b.sIsSync == 0).length;
+
+  Future<void> _syncBeneficiary(Beneficiary beneficiary) async {
+    try {
+      developer.log('Syncing beneficiary: ${beneficiary.firstName} ${beneficiary.lastName}', name: 'BeneficiaryList');
+      
+      // Show loading dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+            ),
+          ),
+        );
+      }
+      
+      // Convert beneficiary to JSON for sync
+      final beneficiaryJson = beneficiary.toJsonForSync();
+      
+      // Sync to server using beneficiaryBeneSync
+      final response = await _dataService.beneficiaryBeneSync(
+        beneficiaries: [beneficiaryJson],
+      );
+      
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
+      if (response.success) {
+        developer.log('========================================', name: 'BeneficiaryList');
+        developer.log('Beneficiary synced successfully', name: 'BeneficiaryList');
+        developer.log('Response data: ${response.data}', name: 'BeneficiaryList');
+        developer.log('Current beneficiary - beneficiary_id: ${beneficiary.beneficiaryId}, offline_id: ${beneficiary.offlineId}, s_is_sync: ${beneficiary.sIsSync}', name: 'BeneficiaryList');
+        
+        // Try to extract beneficiary_id from response
+        int? beneficiaryId;
+        
+        if (response.data != null) {
+          // Response format: {success: true, action: created/updated, beneficiary_id: 94, message: ...}
+          if (response.data!['beneficiary_id'] != null) {
+            beneficiaryId = response.data!['beneficiary_id'] as int?;
+            developer.log('Found beneficiary_id in response: $beneficiaryId', name: 'BeneficiaryList');
+          } else if (response.data!['data'] is Map) {
+            // Alternative format: {success: true, data: {beneficiary_id: 94}}
+            final dataMap = response.data!['data'] as Map;
+            beneficiaryId = dataMap['beneficiary_id'] as int?;
+            developer.log('Found beneficiary_id in data map: $beneficiaryId', name: 'BeneficiaryList');
+          } else if (response.data!['data'] is List) {
+            // Alternative format: {success: true, data: [{beneficiary_id: 94}]}
+            final mappings = response.data!['data'] as List;
+            if (mappings.isNotEmpty) {
+              final mapping = mappings.first;
+              beneficiaryId = mapping['beneficiary_id'] as int?;
+              developer.log('Found beneficiary_id in data list: $beneficiaryId', name: 'BeneficiaryList');
+            }
+          }
+        }
+        
+        // Always mark as synced after successful sync
+        developer.log('Marking beneficiary as synced...', name: 'BeneficiaryList');
+        
+        if (beneficiary.offlineId != null && beneficiaryId != null) {
+          // Has offline_id and got beneficiary_id from server - update with server ID
+          developer.log('Updating offline_id ${beneficiary.offlineId} with server beneficiary_id: $beneficiaryId', name: 'BeneficiaryList');
+          await _beneficiaryRepo.updateWithServerId(beneficiary.offlineId!, beneficiaryId);
+        } else {
+          // Already has beneficiary_id or no beneficiary_id in response - just mark as synced
+          developer.log('Marking as synced (beneficiary_id: ${beneficiary.beneficiaryId ?? beneficiaryId})', name: 'BeneficiaryList');
+          final updatedBeneficiary = beneficiary.copyWith(
+            sIsSync: 1,
+            beneficiaryId: beneficiaryId ?? beneficiary.beneficiaryId,
+          );
+          await _beneficiaryRepo.update(updatedBeneficiary);
+        }
+        
+        developer.log('Update complete, reloading beneficiaries...', name: 'BeneficiaryList');
+        developer.log('========================================', name: 'BeneficiaryList');
+        
+        // Force a complete state refresh
+        if (mounted) {
+          setState(() {
+            _isLoading = true;
+          });
+        }
+        
+        // Reload beneficiaries
+        await _loadBeneficiaries();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Beneficiary synced successfully!'),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sync failed: ${response.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      developer.log('Error syncing beneficiary: $e', name: 'BeneficiaryList');
+      
+      // Close loading dialog if still open
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error syncing: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -113,11 +300,15 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
           // ── Add User FAB ──
           FloatingActionButton.extended(
             heroTag: 'add_user',
-            onPressed: () {},
-            backgroundColor: const Color(0xFF4CAF50),
+            onPressed: _hasInitialFetch ? () async {
+              await context.push(AppRoutes.beneficiary_registration);
+              // Reload the list after returning from registration
+              _loadBeneficiaries();
+            } : null,
+            backgroundColor: _hasInitialFetch ? const Color(0xFF4CAF50) : Colors.grey,
             icon: const Icon(Icons.add, color: Colors.white),
             label: const Text(
-              'Add User',
+              'Add Beneficiary',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -155,7 +346,7 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: () => context.pop(),
                         child: const Icon(Icons.arrow_back_ios,
                             color: Colors.black87, size: 20),
                       ),
@@ -171,18 +362,13 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
                         ),
                       ),
                       Container(
-                        width: 34,
-                        height: 34,
+                        width: 24,
+                        height: 24,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.black87,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.5),
-                            width: 1,
-                          ),
                         ),
-                        child: const Icon(Icons.question_mark_rounded,
-                            color: Colors.white, size: 18),
+                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -205,6 +391,7 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
                     ),
                     child: TextField(
                       controller: _searchController,
+                      cursorColor: Colors.green,
                       onChanged: (val) => setState(() => _searchQuery = val),
                       decoration: const InputDecoration(
                         hintText: 'Search by Name or National ID...',
@@ -226,95 +413,109 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _StatSummary(
-                          value: '2,50,000',
+                          value: _totalCount.toString(),
                           label: 'TOTAL',
-                          color: Colors.black87),
+                          color: const Color(0xFF4CAF50)),
                       _divider(),
                       _StatSummary(
-                          value: '1,34,567',
+                          value: _syncedCount.toString(),
                           label: 'SYNCED',
-                          color: Colors.black87),
+                          color: const Color(0xFF4CAF50)),
                       _divider(),
                       _StatSummary(
-                          value: '1,15,433',
+                          value: _unsyncedCount.toString(),
                           label: 'OFFLINE',
-                          color: Colors.black87),
-                      // Align(
-                      //   alignment: Alignment.centerRight,
-                      //   child: Container(
-                      //     // padding: const EdgeInsets.all(6),
-                      //     // decoration: BoxDecoration(
-                      //     //   border: Border.all(color: Colors.black26),
-                      //     //   borderRadius: BorderRadius.circular(6),
-                      //     // ),
-                      //     child: const Icon(Icons.sync,
-                      //         size: 16, color: Colors.black54),
-                      //   ),
-                      // ),
+                          color: const Color(0xFF4CAF50)),
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
+                
+                // ── Records loaded indicator ──
+                if (_filtered.isNotEmpty)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '• ${_filtered.length}/${_totalCount} Records Loaded',
+                        style: const TextStyle(
+                          color: Color(0xFF4CAF50),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
 
                 // ── List ──
                 Expanded(
-                  child: Stack(
-                    children: [
-                      ListView.separated(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                        itemCount: _filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final item = _filtered[index];
-                          return _BeneficiaryCard(
-                            name: item['name'],
-                            userId: item['userId'],
-                            nationalId: item['nationalId'],
-                            synced: item['synced'],
-                            missing: List<String>.from(item['missing']),
-                          );
-                        },
-                      ),
-                      // ── Bottom records loaded indicator ──
-                      Positioned(
-                        bottom: 16,
-                        left: 54,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF4CAF50),
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
                           ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check_circle_outline,
-                                  color: Colors.white, size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                '8/100 New records loaded',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                        )
+                      : !_hasInitialFetch
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.cloud_download, size: 64, color: Colors.grey.shade300),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Please fetch data from server first',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Use the sync option to download beneficiaries',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                            )
+                          : _filtered.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.person_off, size: 64, color: Colors.grey.shade300),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No beneficiaries found',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.separated(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                              itemCount: _filtered.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final beneficiary = _filtered[index];
+                                return _BeneficiaryCard(
+                                  beneficiary: beneficiary,
+                                  onSync: () => _syncBeneficiary(beneficiary),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
@@ -350,23 +551,22 @@ class _StatSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
-          style: TextStyle(
-            fontSize: 16,
+          style: const TextStyle(
+            fontSize: 28,
             fontWeight: FontWeight.bold,
-            color: color,
+            color: Colors.black87,
           ),
         ),
         Text(
           label,
           style: TextStyle(
-            fontSize: 10,
-            color: color == Colors.black87 ? Colors.black54 : color,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.3,
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
           ),
         ),
       ],
@@ -377,160 +577,194 @@ class _StatSummary extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BeneficiaryCard extends StatelessWidget {
-  final String name;
-  final String userId;
-  final String nationalId;
-  final bool synced;
-  final List<String> missing;
+  final Beneficiary beneficiary;
+  final VoidCallback onSync;
 
   const _BeneficiaryCard({
-    required this.name,
-    required this.userId,
-    required this.nationalId,
-    required this.synced,
-    required this.missing,
+    required this.beneficiary,
+    required this.onSync,
   });
 
   @override
   Widget build(BuildContext context) {
+    final synced = beneficiary.sIsSync == 1;
+    final name = '${beneficiary.firstName ?? ''} ${beneficiary.lastName ?? ''}'.trim();
+    final nationalId = beneficiary.nationalId ?? 'N/A';
+    
+    // Check for missing required fields from BeneficiaryRegistrationScreen
+    final List<String> missing = [];
+    if (beneficiary.trainingSite == null || beneficiary.trainingSite!.isEmpty) missing.add('Training Site');
+    if (beneficiary.firstName == null || beneficiary.firstName!.isEmpty) missing.add('First Name');
+    if (beneficiary.lastName == null || beneficiary.lastName!.isEmpty) missing.add('Last Name');
+    if (beneficiary.mobileNo == null || beneficiary.mobileNo!.isEmpty) missing.add('Mobile Number');
+    if (beneficiary.nationalId == null || beneficiary.nationalId!.isEmpty) missing.add('National ID');
+    if (beneficiary.femalesBelow18 == null) missing.add('Females -18');
+    if (beneficiary.femalesAbove18 == null) missing.add('Females +18');
+    if (beneficiary.malesBelow18 == null) missing.add('Males -18');
+    if (beneficiary.malesAbove18 == null) missing.add('Males +18');
+    if (beneficiary.cookingMethod == null || beneficiary.cookingMethod!.isEmpty) missing.add('Cooking Method');
+    if (beneficiary.language == null || beneficiary.language!.isEmpty) missing.add('Preferred Language');
+
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border(
-          left: BorderSide(
-            color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
-            width: 4,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // ── Avatar ──
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: synced
-                        ? const Color(0xFFE8F5E9)
-                        : const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    synced
-                        ? Icons.cloud_done_outlined
-                        : Icons.cloud_off_outlined,
-                    color: synced ? const Color(0xFF4CAF50) : Colors.black26,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // ── Info ──
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          _SyncBadge(synced: synced),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'USER ID: $userId',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.black45,
-                        ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'NATIONAL ID: $nationalId',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.black45,
-                            ),
-                          ),
-                          const Icon(Icons.sort,
-                              size: 18, color: Colors.black38),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border(
+            left: BorderSide(
+              color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+              width: 5,
             ),
-
-            // ── Missing tags ──
-            if (missing.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              const Divider(height: 1, color: Color(0xFFF0F0F0)),
-              const SizedBox(height: 8),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '• MISSING:',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
+                  // ── Avatar ──
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      color: Color(0xFF4CAF50),
+                      size: 28,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  ...missing.map(
-                    (tag) => Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Container(
+                  const SizedBox(width: 12),
+
+                  // ── Info ──
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name.isNotEmpty ? name : 'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            _SyncBadge(
+                              synced: synced,
+                              onTap: synced ? null : onSync,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        if (beneficiary.beneficiaryId != null)
+                          Text(
+                            'USER ID: ${beneficiary.beneficiaryId}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        if (beneficiary.offlineId != null && beneficiary.beneficiaryId == null)
+                          Text(
+                            'OFFLINE ID: ${beneficiary.offlineId}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'NATIONAL ID: $nationalId',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                            // Edit Icon - only show if there are missing fields
+                            if (missing.isNotEmpty)
+                              GestureDetector(
+                                onTap: () async {
+                                  // Navigate to edit screen
+                                  await context.push(
+                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
+                                  );
+                                },
+                                child: const Icon(
+                                  Icons.edit_note,
+                                  color: Colors.black54,
+                                  size: 24,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // ── Missing tags ──
+              if (missing.isNotEmpty) ...[
+                Divider(),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    const Text(
+                      '• MISSING:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                    ...missing.map(
+                      (tag) => Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFCE4EC),
+                          color: const Color(0xFFFFE4E8),
                           borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: Colors.red.withOpacity(0.2)),
                         ),
                         child: Text(
                           tag,
                           style: const TextStyle(
                             fontSize: 11,
-                            color: Colors.red,
+                            color: Color(0xFFE91E63),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -538,35 +772,43 @@ class _BeneficiaryCard extends StatelessWidget {
 
 class _SyncBadge extends StatelessWidget {
   final bool synced;
-  const _SyncBadge({required this.synced});
+  final VoidCallback? onTap;
+  
+  const _SyncBadge({
+    required this.synced,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            synced ? Icons.check_circle_outline : Icons.sync,
-            color: Colors.white,
-            size: 12,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            synced ? 'SYNCED' : 'NOT SYNCED',
-            style: const TextStyle(
+    return GestureDetector(
+      onTap: synced ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              synced ? Icons.check_circle : Icons.sync,
               color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.3,
+              size: 14,
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Text(
+              synced ? 'SYNCED' : 'NOT SYNCED',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

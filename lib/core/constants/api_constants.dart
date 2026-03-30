@@ -11,6 +11,13 @@ class ApiConstants {
   static const String updateData = '/training-site/update_data';
   static const String districtSlug = '/training-site/district_slug';
   static const String authoritySlug = '/training-site/authority_slug';
+  static const String langSlug = '/training-site/lang_slug';
+  static const String cookstoveSlug = '/training-site/cookstove_slug';
+  static const String getAllSites = '/training-site/getAllSites';
+  static const String beneficiarySync = '/beneficiary/sync';
+  static const String beneficiaryList = '/beneficiary/list';
+  static const String beneficiaryBeneSync = '/beneficiary/bene_sync';
+  static const String beneficiaryData = '/beneficiary/Beneficiary_data';
   
   // Timeout durations
   static const Duration connectTimeout = Duration(seconds: 30);

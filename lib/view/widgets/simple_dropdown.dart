@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class SearchableDropdown<T> extends StatefulWidget {
+class SimpleDropdown<T> extends StatefulWidget {
   final T? value;
   final List<T> items;
   final String Function(T) itemLabel;
@@ -8,7 +8,7 @@ class SearchableDropdown<T> extends StatefulWidget {
   final String hint;
   final bool isLoading;
 
-  const SearchableDropdown({
+  const SimpleDropdown({
     super.key,
     required this.value,
     required this.items,
@@ -19,16 +19,16 @@ class SearchableDropdown<T> extends StatefulWidget {
   });
 
   @override
-  State<SearchableDropdown<T>> createState() => _SearchableDropdownState<T>();
+  State<SimpleDropdown<T>> createState() => _SimpleDropdownState<T>();
 }
 
-class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
-  void _showSearchDialog() {
+class _SimpleDropdownState<T> extends State<SimpleDropdown<T>> {
+  void _showBottomSheet() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _SearchableDropdownDialog<T>(
+      isScrollControlled: true,
+      builder: (context) => _SimpleDropdownBottomSheet<T>(
         items: widget.items,
         itemLabel: widget.itemLabel,
         onSelected: (item) {
@@ -36,6 +36,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
           Navigator.pop(context);
         },
         hint: widget.hint,
+        currentValue: widget.value,
       ),
     );
   }
@@ -43,7 +44,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.isLoading ? null : _showSearchDialog,
+      onTap: widget.isLoading ? null : _showBottomSheet,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         decoration: BoxDecoration(
@@ -80,60 +81,27 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   }
 }
 
-class _SearchableDropdownDialog<T> extends StatefulWidget {
+class _SimpleDropdownBottomSheet<T> extends StatelessWidget {
   final List<T> items;
   final String Function(T) itemLabel;
   final void Function(T) onSelected;
   final String hint;
+  final T? currentValue;
 
-  const _SearchableDropdownDialog({
+  const _SimpleDropdownBottomSheet({
     required this.items,
     required this.itemLabel,
     required this.onSelected,
     required this.hint,
+    this.currentValue,
   });
-
-  @override
-  State<_SearchableDropdownDialog<T>> createState() =>
-      _SearchableDropdownDialogState<T>();
-}
-
-class _SearchableDropdownDialogState<T>
-    extends State<_SearchableDropdownDialog<T>> {
-  final TextEditingController _searchController = TextEditingController();
-  List<T> _filteredItems = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredItems = widget.items;
-    _searchController.addListener(_filterItems);
-  }
-
-  void _filterItems() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredItems = widget.items;
-      } else {
-        _filteredItems = widget.items
-            .where((item) =>
-                widget.itemLabel(item).toLowerCase().contains(query))
-            .toList();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.only(
@@ -142,6 +110,7 @@ class _SearchableDropdownDialogState<T>
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Header
           Padding(
@@ -150,7 +119,7 @@ class _SearchableDropdownDialogState<T>
               children: [
                 Expanded(
                   child: Text(
-                    widget.hint.toUpperCase(),
+                    hint.toUpperCase(),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -167,54 +136,37 @@ class _SearchableDropdownDialogState<T>
           ),
           const Divider(height: 1),
           
-          // Search field
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              cursorColor: Colors.green,
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                hintStyle: const TextStyle(color: Colors.black38),
-                prefixIcon: const Icon(Icons.search, color: Colors.black54),
-                filled: true,
-                fillColor: const Color(0xFFF5F5F5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-            ),
-          ),
-          
           // Items list
-          Expanded(
-            child: _filteredItems.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No items found',
-                      style: TextStyle(
-                        color: Colors.black38,
-                        fontSize: 14,
+          Flexible(
+            child: items.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'No items available',
+                        style: TextStyle(
+                          color: Colors.black38,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   )
                 : ListView.builder(
-                    itemCount: _filteredItems.length,
+                    shrinkWrap: true,
+                    itemCount: items.length,
                     itemBuilder: (context, index) {
-                      final item = _filteredItems[index];
+                      final item = items[index];
+                      final isSelected = currentValue != null && item == currentValue;
+                      
                       return InkWell(
-                        onTap: () => widget.onSelected(item),
+                        onTap: () => onSelected(item),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 16,
                           ),
                           decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFFE8F5E9) : Colors.white,
                             border: Border(
                               bottom: BorderSide(
                                 color: Colors.grey.shade200,
@@ -222,12 +174,25 @@ class _SearchableDropdownDialogState<T>
                               ),
                             ),
                           ),
-                          child: Text(
-                            widget.itemLabel(item),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  itemLabel(item),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: Color(0xFF4CAF50),
+                                  size: 20,
+                                ),
+                            ],
                           ),
                         ),
                       );

@@ -5,10 +5,13 @@ import 'package:irise/core/network/dio_client.dart';
 import 'package:irise/core/storage/token_storage.dart';
 import 'package:irise/data/models/auth_request.dart';
 import 'package:irise/data/models/auth_response.dart';
+import 'package:irise/data/services/data_service.dart';
+import 'dart:developer' as developer;
 
 class AuthService {
   final DioClient _dioClient = DioClient.instance;
   final TokenStorage _tokenStorage = TokenStorage();
+  final DataService _dataService = DataService();
 
   Future<bool> login({
     required String username,
@@ -67,6 +70,10 @@ class AuthService {
               await _tokenStorage.saveUserName(user.name!);
             }
           }
+          
+          // Sync lookup data (languages, cookstoves, training sites) after successful login
+          await _syncLookupData();
+          
           print('AuthService: Login successful, returning true');
           return true;
         } else {
@@ -114,5 +121,49 @@ class AuthService {
       };
     }
     return null;
+  }
+
+  /// Sync lookup data (languages, cookstoves, training sites) after login
+  /// This ensures dropdown data is available for beneficiary registration
+  Future<void> _syncLookupData() async {
+    try {
+      developer.log('========================================', name: 'AuthService');
+      developer.log('Syncing lookup data after login...', name: 'AuthService');
+      developer.log('========================================', name: 'AuthService');
+      
+      // Sync all lookup data in parallel
+      final results = await Future.wait([
+        _dataService.syncLanguagesToLocal(),
+        _dataService.syncCookstovesToLocal(),
+        _dataService.syncTrainingSiteNamesToLocal(),
+      ]);
+      
+      final languagesResult = results[0];
+      final cookstovesResult = results[1];
+      final trainingSitesResult = results[2];
+      
+      if (languagesResult.success) {
+        developer.log('✅ Synced ${languagesResult.data ?? 0} languages', name: 'AuthService');
+      } else {
+        developer.log('⚠️ Failed to sync languages: ${languagesResult.message}', name: 'AuthService');
+      }
+      
+      if (cookstovesResult.success) {
+        developer.log('✅ Synced ${cookstovesResult.data ?? 0} cookstoves', name: 'AuthService');
+      } else {
+        developer.log('⚠️ Failed to sync cookstoves: ${cookstovesResult.message}', name: 'AuthService');
+      }
+      
+      if (trainingSitesResult.success) {
+        developer.log('✅ Synced ${trainingSitesResult.data ?? 0} training site names', name: 'AuthService');
+      } else {
+        developer.log('⚠️ Failed to sync training site names: ${trainingSitesResult.message}', name: 'AuthService');
+      }
+      
+      developer.log('========================================', name: 'AuthService');
+    } catch (e) {
+      developer.log('Error syncing lookup data: $e', name: 'AuthService');
+      // Don't fail login if lookup data sync fails
+    }
   }
 }

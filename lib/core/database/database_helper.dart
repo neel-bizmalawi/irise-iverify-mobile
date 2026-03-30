@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 7;
+  static const int _databaseVersion = 9;
 
   DatabaseHelper._internal();
 
@@ -72,28 +72,54 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create beneficiaries table
+    // Create beneficiaries table with complete schema
     await db.execute('''
       CREATE TABLE beneficiaries (
-        beneficiary_id INTEGER PRIMARY KEY,
-        training_point_id INTEGER,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        beneficiary_id INTEGER UNIQUE,
+        training_site TEXT,
+        m_user_id INTEGER,
+        m_site_id INTEGER,
         first_name TEXT,
         last_name TEXT,
-        gender TEXT,
-        age INTEGER,
-        phone_number TEXT,
+        mobile_no TEXT,
+        other_cookstove TEXT DEFAULT 'no',
+        females_below_18 INTEGER,
+        females_above_18 INTEGER,
+        males_below_18 INTEGER,
+        males_above_18 INTEGER,
+        cooking_method TEXT,
+        district_name TEXT,
         national_id TEXT,
-        household_size INTEGER,
-        cookstoves_received INTEGER,
-        s_is_sync INTEGER DEFAULT 0,
-        created_by TEXT,
-        modified_by TEXT,
+        national_id_attachment TEXT,
+        house_pic TEXT,
+        cookstove_pic TEXT,
+        signature TEXT,
+        emp_id INTEGER,
+        language TEXT DEFAULT 'english',
+        read_doc TEXT DEFAULT 'no',
+        understood_doc TEXT DEFAULT 'no',
+        emp_sign TEXT,
+        read_to_you TEXT DEFAULT 'no',
+        stove_status_delivery TEXT DEFAULT 'no',
+        no_other_cook_stove_present TEXT DEFAULT 'no',
+        primary_residence_confirmation TEXT DEFAULT 'no',
+        cookstove_pic_timestamp TEXT,
+        house_pic_timestamp TEXT,
+        national_id_timestamp TEXT,
+        signature_timestamp TEXT,
+        device_serial_no TEXT,
+        latitude REAL,
+        longitude REAL,
+        geo_address TEXT,
         created_date TEXT,
+        created_by INTEGER,
         modified_date TEXT,
+        modified_by INTEGER,
         status TEXT DEFAULT 'active',
-        offline_id INTEGER,
-        server_time TEXT,
-        FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
+        s_is_sync INTEGER DEFAULT 0,
+        offline_id INTEGER UNIQUE,
+        server_time TEXT
       )
     ''');
 
@@ -154,6 +180,30 @@ class DatabaseHelper {
         slug TEXT,
         district_id INTEGER,
         status TEXT
+      )
+    ''');
+
+    // Create languages table
+    await db.execute('''
+      CREATE TABLE languages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lang_name TEXT UNIQUE NOT NULL
+      )
+    ''');
+
+    // Create cookstoves table
+    await db.execute('''
+      CREATE TABLE cookstoves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cookstove_name TEXT UNIQUE NOT NULL
+      )
+    ''');
+
+    // Create training_sites_list table (for dropdown)
+    await db.execute('''
+      CREATE TABLE training_sites_list (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        training_site TEXT UNIQUE NOT NULL
       )
     ''');
 
@@ -514,6 +564,132 @@ class DatabaseHelper {
       }
       
       developer.log('Database migration to version 7 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 8) {
+      // Migration from version 7 to 8: Update beneficiaries table with complete schema
+      developer.log('Migrating to version 8: Updating beneficiaries table schema', name: 'DatabaseHelper');
+      
+      try {
+        // Create new beneficiaries table with complete schema
+        await db.execute('''
+          CREATE TABLE beneficiaries_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            beneficiary_id INTEGER UNIQUE,
+            training_site TEXT,
+            m_user_id INTEGER,
+            m_site_id INTEGER,
+            first_name TEXT,
+            last_name TEXT,
+            mobile_no TEXT,
+            other_cookstove TEXT DEFAULT 'no',
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            cooking_method TEXT,
+            district_name TEXT,
+            national_id TEXT,
+            national_id_attachment TEXT,
+            house_pic TEXT,
+            cookstove_pic TEXT,
+            signature TEXT,
+            emp_id INTEGER,
+            language TEXT DEFAULT 'english',
+            read_doc TEXT DEFAULT 'no',
+            understood_doc TEXT DEFAULT 'no',
+            emp_sign TEXT,
+            read_to_you TEXT DEFAULT 'no',
+            stove_status_delivery TEXT DEFAULT 'no',
+            no_other_cook_stove_present TEXT DEFAULT 'no',
+            primary_residence_confirmation TEXT DEFAULT 'no',
+            cookstove_pic_timestamp TEXT,
+            house_pic_timestamp TEXT,
+            national_id_timestamp TEXT,
+            signature_timestamp TEXT,
+            device_serial_no TEXT,
+            latitude REAL,
+            longitude REAL,
+            geo_address TEXT,
+            created_date TEXT,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            status TEXT DEFAULT 'active',
+            s_is_sync INTEGER DEFAULT 0,
+            offline_id INTEGER UNIQUE,
+            server_time TEXT
+          )
+        ''');
+        
+        // Try to copy existing data if the old table exists and has compatible columns
+        try {
+          await db.execute('''
+            INSERT INTO beneficiaries_new (
+              beneficiary_id, first_name, last_name, national_id,
+              created_date, created_by, modified_date, modified_by,
+              status, s_is_sync, offline_id, server_time
+            )
+            SELECT 
+              beneficiary_id, first_name, last_name, national_id,
+              created_date, created_by, modified_date, modified_by,
+              status, s_is_sync, offline_id, server_time
+            FROM beneficiaries
+          ''');
+          developer.log('Copied existing beneficiary data', name: 'DatabaseHelper');
+        } catch (e) {
+          developer.log('No existing beneficiary data to copy or incompatible schema: $e', name: 'DatabaseHelper');
+        }
+        
+        // Drop old table and rename new one
+        await db.execute('DROP TABLE IF EXISTS beneficiaries');
+        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+        
+        developer.log('Successfully migrated beneficiaries table to version 8', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 8 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 8 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 9) {
+      // Migration from version 8 to 9: Add languages, cookstoves, and training_sites_list tables
+      developer.log('Migrating to version 9: Adding lookup tables', name: 'DatabaseHelper');
+      
+      try {
+        // Create languages table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS languages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lang_name TEXT UNIQUE NOT NULL
+          )
+        ''');
+        
+        // Create cookstoves table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS cookstoves (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cookstove_name TEXT UNIQUE NOT NULL
+          )
+        ''');
+        
+        // Create training_sites_list table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS training_sites_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            training_site TEXT UNIQUE NOT NULL
+          )
+        ''');
+        
+        developer.log('Successfully added lookup tables for version 9', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 9 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 9 completed', name: 'DatabaseHelper');
     }
   }
 

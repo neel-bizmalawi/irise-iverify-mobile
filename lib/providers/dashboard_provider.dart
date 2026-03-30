@@ -60,8 +60,8 @@ class DashboardProvider extends ChangeNotifier {
       final results = await Future.wait([
         _trainingSiteRepository.getSyncedCount(),  // Total count = only synced records
         _trainingSiteRepository.getUnsyncedCount(),
-        _beneficiaryRepository.getCount(),
-        _beneficiaryRepository.getUnsyncedCount(),
+        _beneficiaryRepository.getSyncedCount(),  // LOCAL SAVED = synced records only
+        _beneficiaryRepository.getUnsyncedCount(),  // OFFLINE SAVED = unsynced records
         _trainingRepository.getCount(),
         _trainingRepository.getUnsyncedCount(),
       ]);
@@ -616,43 +616,6 @@ class DashboardProvider extends ChangeNotifier {
     }
   }
 
-  // Sync beneficiaries from server (placeholder for future implementation)
-  Future<SyncResult> syncBeneficiaries({
-    Function(String status, int current, int total)? onProgress,
-  }) async {
-    _isSyncing = true;
-    notifyListeners();
-
-    try {
-      developer.log('Starting beneficiaries sync...', name: 'DashboardProvider');
-      
-      // TODO: Implement beneficiaries sync when API is available
-      // For now, return a placeholder result
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API call
-      
-      // Save sync timestamp for placeholder
-      await _saveLastSyncTime('beneficiary', DateTime.now());
-      
-      // Refresh dashboard data
-      await loadDashboardData();
-      
-      return SyncResult(
-        success: true,
-        recordsProcessed: 0,
-        message: 'Beneficiaries sync not yet implemented',
-      );
-    } catch (e) {
-      developer.log('Error syncing beneficiaries: $e', name: 'DashboardProvider');
-      return SyncResult(
-        success: false,
-        message: 'Error syncing beneficiaries: $e',
-      );
-    } finally {
-      _isSyncing = false;
-      notifyListeners();
-    }
-  }
-
   // Sync monitoring data from server (placeholder for future implementation)
   Future<SyncResult> syncMonitoring({
     Function(String status, int current, int total)? onProgress,
@@ -827,6 +790,138 @@ class DashboardProvider extends ChangeNotifier {
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${months[lastSync.month - 1]} ${lastSync.day} • $timeFormat';
+    }
+  }
+
+  // Sync beneficiaries from server
+  Future<SyncResult> syncBeneficiaries({
+    Function(String status, int current, int total)? onProgress,
+  }) async {
+    _isSyncing = true;
+    notifyListeners();
+
+    try {
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('STARTING BENEFICIARY SYNC', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      
+      onProgress?.call('Starting beneficiary sync...', 0, 0);
+      
+      // Check if this is initial sync or incremental sync
+      final isInitialSync = _lastBeneficiarySync == null;
+      
+      if (isInitialSync) {
+        developer.log('Performing INITIAL FULL SYNC using pagination', name: 'DashboardProvider');
+        
+        // Fetch all beneficiaries from server using pagination
+        final response = await _dataService.getAllBeneficiariesPaginated(
+          limit: 50,
+          onProgress: (currentRecords, totalRecords) {
+            // Report progress with actual record counts
+            onProgress?.call('Downloading records...', currentRecords, totalRecords);
+          },
+          storeInDatabase: true,
+        );
+        
+        if (response.success && response.data != null) {
+          final recordsProcessed = response.data!.length;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL BENEFICIARY SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed beneficiaries', name: 'DashboardProvider');
+          
+          // Save sync time
+          await _saveLastSyncTime('beneficiary', DateTime.now());
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Beneficiary sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed beneficiaries'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL BENEFICIARY SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync beneficiaries',
+          );
+        }
+      } else {
+        developer.log('Performing INCREMENTAL SYNC using Beneficiary_data endpoint', name: 'DashboardProvider');
+        
+        // Capture the current time BEFORE making the API call
+        final newSyncTime = DateTime.now();
+        
+        // Format last sync date for API in ISO 8601 format (UTC)
+        final lastSyncDate = _lastBeneficiarySync!.toUtc().toIso8601String();
+        
+        developer.log('Last sync date (ISO 8601): $lastSyncDate', name: 'DashboardProvider');
+        developer.log('New sync time will be: ${newSyncTime.toUtc().toIso8601String()}', name: 'DashboardProvider');
+        
+        onProgress?.call('Checking for updates since $lastSyncDate...', 0, 0);
+        
+        // Use incremental sync endpoint
+        final response = await _dataService.syncUpdatedBeneficiaries(lastSyncDate);
+        
+        if (response.success) {
+          final recordsProcessed = response.data ?? 0;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL BENEFICIARY SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed updated beneficiaries', name: 'DashboardProvider');
+          
+          // Save the sync time that was captured BEFORE the API call
+          await _saveLastSyncTime('beneficiary', newSyncTime);
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Beneficiary sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed updated beneficiaries'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL BENEFICIARY SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync updated beneficiaries',
+          );
+        }
+      }
+    } catch (e) {
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('BENEFICIARY SYNC EXCEPTION', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('Error: $e', name: 'DashboardProvider');
+      
+      return SyncResult(
+        success: false,
+        message: 'Error syncing beneficiaries: $e',
+      );
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
     }
   }
 }

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:irise/route/app_routes.dart';
 import 'package:irise/view/screen/beneficiary.dart';
+import 'package:irise/view/screen/beneficiary_registration.dart';
 import 'package:irise/view/screen/conduct_training.dart';
+import 'package:irise/view/screen/edit_household.dart';
 import 'package:irise/view/screen/home.dart';
+import 'package:irise/view/screen/household.dart';
 import 'package:irise/view/screen/login.dart';
 import 'package:irise/view/screen/modules.dart';
 import 'package:irise/view/screen/monitoring.dart';
@@ -149,6 +152,42 @@ GoRouter createRouter(AuthProvider authProvider) {
           child: const ConductTrainingScreen(),
           transitionsBuilder: _slideUpTransition,
         ),
+      ),
+
+      GoRoute(
+        path: AppRoutes.beneficiary_registration,
+        name: 'beneficiary_registration',
+        pageBuilder: (context, state) {
+          final beneficiaryId = state.uri.queryParameters['beneficiaryId'];
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: BeneficiaryRegistrationScreen(beneficiaryId: beneficiaryId),
+            transitionsBuilder: _slideUpTransition,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: AppRoutes.household,
+        name: 'household',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const HouseholdScreen(),
+          transitionsBuilder: _slideUpTransition,
+        ),
+      ),
+
+      GoRoute(
+        path: AppRoutes.editHousehold,
+        name: 'editHousehold',
+        pageBuilder: (context, state) {
+          final householdId = state.uri.queryParameters['householdId'];
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: EditHouseholdScreen(householdId: householdId),
+            transitionsBuilder: _slideUpTransition,
+          );
+        },
       ),
 
       // ─── Profile ──────────────────────────────────────────

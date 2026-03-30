@@ -4,12 +4,21 @@ import 'package:irise/core/network/dio_client.dart';
 import 'package:irise/data/models/training_site.dart';
 import 'package:irise/data/models/district.dart';
 import 'package:irise/data/models/authority.dart';
+import 'package:irise/data/models/language.dart';
+import 'package:irise/data/models/cookstove.dart';
+import 'package:irise/data/models/training_site_list.dart';
 import 'package:irise/data/models/sync_response.dart';
 import 'package:irise/data/models/paginated_response.dart';
 import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/repositories/district_repository.dart';
 import 'package:irise/data/repositories/authority_repository.dart';
+import 'package:irise/data/repositories/language_repository.dart';
+import 'package:irise/data/repositories/cookstove_repository.dart';
+import 'package:irise/data/repositories/training_site_list_repository.dart';
+import 'package:irise/data/repositories/beneficiary_repository.dart';
+import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/core/database/database_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -1354,6 +1363,919 @@ class DataService {
         success: false,
         data: false,
         message: 'Failed to verify data persistence: $e',
+      );
+    }
+  }
+
+  /// GET /training-site/lang_slug
+  /// Fetches all languages
+  Future<DataResponse<List<String>>> getLanguages() async {
+    try {
+      developer.log('Fetching languages...', name: 'DataService');
+      
+      final response = await _dioClient.get(ApiConstants.langSlug);
+      
+      if (response.data != null) {
+        List<String> languages = [];
+        
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            languages = data.map((item) => item['lang_name'] as String).toList();
+          }
+        } else if (response.data is List) {
+          languages = (response.data as List).map((item) => item['lang_name'] as String).toList();
+        }
+        
+        developer.log('Fetched ${languages.length} languages', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: languages,
+          message: 'Languages fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching languages: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch languages',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// GET /training-site/cookstove_slug
+  /// Fetches all cookstoves
+  Future<DataResponse<List<String>>> getCookstoves() async {
+    try {
+      developer.log('Fetching cookstoves...', name: 'DataService');
+      
+      final response = await _dioClient.get(ApiConstants.cookstoveSlug);
+      
+      if (response.data != null) {
+        List<String> cookstoves = [];
+        
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            cookstoves = data.map((item) => item['cookstove_name'] as String).toList();
+          }
+        } else if (response.data is List) {
+          cookstoves = (response.data as List).map((item) => item['cookstove_name'] as String).toList();
+        }
+        
+        developer.log('Fetched ${cookstoves.length} cookstoves', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: cookstoves,
+          message: 'Cookstoves fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching cookstoves: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch cookstoves',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// GET /training-site/getAllSites
+  /// Fetches all training site names
+  Future<DataResponse<List<String>>> getAllTrainingSiteNames() async {
+    try {
+      developer.log('Fetching all training site names...', name: 'DataService');
+      
+      final response = await _dioClient.get(ApiConstants.getAllSites);
+      
+      if (response.data != null) {
+        List<String> trainingSites = [];
+        
+        // Handle response structure: {"message": "...", "data": [...]}
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            trainingSites = data.map((item) {
+              if (item is Map && item['training_site'] != null) {
+                return item['training_site'] as String;
+              }
+              return '';
+            }).where((site) => site.isNotEmpty).toList();
+          }
+        } else if (response.data is List) {
+          trainingSites = (response.data as List).map((item) {
+            if (item is Map && item['training_site'] != null) {
+              return item['training_site'] as String;
+            }
+            return '';
+          }).where((site) => site.isNotEmpty).toList();
+        }
+        
+        developer.log('Fetched ${trainingSites.length} training site names', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: trainingSites,
+          message: 'Training site names fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching training site names: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch training site names',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// Sync languages from server to local database
+  Future<DataResponse<int>> syncLanguagesToLocal() async {
+    try {
+      developer.log('Syncing languages to local database...', name: 'DataService');
+      
+      final response = await getLanguages();
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch languages from server',
+        );
+      }
+      
+      final languages = response.data!;
+      
+      if (languages.isNotEmpty) {
+        final languageRepo = LanguageRepository();
+        await languageRepo.deleteAll();
+        
+        for (var langName in languages) {
+          await languageRepo.insert(Language(langName: langName));
+        }
+        
+        developer.log('Successfully synced ${languages.length} languages to local database', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: languages.length,
+        message: 'Successfully synced ${languages.length} languages',
+      );
+    } catch (e) {
+      developer.log('Error syncing languages to local: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync languages: $e',
+      );
+    }
+  }
+
+  /// Sync cookstoves from server to local database
+  Future<DataResponse<int>> syncCookstovesToLocal() async {
+    try {
+      developer.log('Syncing cookstoves to local database...', name: 'DataService');
+      
+      final response = await getCookstoves();
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch cookstoves from server',
+        );
+      }
+      
+      final cookstoves = response.data!;
+      
+      if (cookstoves.isNotEmpty) {
+        final cookstoveRepo = CookstoveRepository();
+        await cookstoveRepo.deleteAll();
+        
+        for (var cookstoveName in cookstoves) {
+          await cookstoveRepo.insert(Cookstove(cookstoveName: cookstoveName));
+        }
+        
+        developer.log('Successfully synced ${cookstoves.length} cookstoves to local database', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: cookstoves.length,
+        message: 'Successfully synced ${cookstoves.length} cookstoves',
+      );
+    } catch (e) {
+      developer.log('Error syncing cookstoves to local: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync cookstoves: $e',
+      );
+    }
+  }
+
+  /// Sync training site names from server to local database
+  Future<DataResponse<int>> syncTrainingSiteNamesToLocal() async {
+    try {
+      developer.log('Syncing training site names to local database...', name: 'DataService');
+      
+      final response = await getAllTrainingSiteNames();
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch training site names from server',
+        );
+      }
+      
+      final trainingSites = response.data!;
+      
+      if (trainingSites.isNotEmpty) {
+        final trainingSiteListRepo = TrainingSiteListRepository();
+        await trainingSiteListRepo.deleteAll();
+        
+        for (var siteName in trainingSites) {
+          await trainingSiteListRepo.insert(TrainingSiteList(trainingSite: siteName));
+        }
+        
+        developer.log('Successfully synced ${trainingSites.length} training site names to local database', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: trainingSites.length,
+        message: 'Successfully synced ${trainingSites.length} training site names',
+      );
+    } catch (e) {
+      developer.log('Error syncing training site names to local: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync training site names: $e',
+      );
+    }
+  }
+
+  /// POST /beneficiary/sync
+  /// Syncs beneficiaries to server and updates with server-assigned beneficiary_id
+  Future<DataResponse<Map<String, dynamic>>> syncBeneficiariesToServer() async {
+    try {
+      developer.log('Syncing beneficiaries to server...', name: 'DataService');
+      
+      final beneficiaryRepo = BeneficiaryRepository();
+      final unsyncedBeneficiaries = await beneficiaryRepo.getUnsynced();
+      
+      if (unsyncedBeneficiaries.isEmpty) {
+        developer.log('No unsynced beneficiaries to sync', name: 'DataService');
+        return DataResponse(
+          success: true,
+          data: {'synced': 0},
+          message: 'No beneficiaries to sync',
+        );
+      }
+      
+      developer.log('Found ${unsyncedBeneficiaries.length} unsynced beneficiaries', name: 'DataService');
+      
+      // Convert to JSON for sync (excludes national_id)
+      final beneficiariesJson = unsyncedBeneficiaries.map((b) => b.toJsonForSync()).toList();
+      
+      developer.log('Sending beneficiaries to server...', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.beneficiarySync,
+        data: {'beneficiaries': beneficiariesJson},
+      );
+      
+      if (response.data != null) {
+        developer.log('Server response received', name: 'DataService');
+        
+        // Parse response to get beneficiary_id mappings
+        // Expected response format: { "data": [{ "offline_id": 1, "beneficiary_id": 123 }, ...] }
+        final responseData = response.data;
+        int syncedCount = 0;
+        
+        if (responseData is Map && responseData['data'] != null) {
+          final mappings = responseData['data'] as List;
+          
+          for (var mapping in mappings) {
+            final offlineId = mapping['offline_id'] as int?;
+            final beneficiaryId = mapping['beneficiary_id'] as int?;
+            
+            if (offlineId != null && beneficiaryId != null) {
+              // Update local record with server-assigned beneficiary_id
+              await beneficiaryRepo.updateWithServerId(offlineId, beneficiaryId);
+              syncedCount++;
+              developer.log('Updated beneficiary offline_id=$offlineId with beneficiary_id=$beneficiaryId', name: 'DataService');
+            }
+          }
+        }
+        
+        developer.log('Successfully synced $syncedCount beneficiaries', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: {'synced': syncedCount},
+          message: 'Successfully synced $syncedCount beneficiaries',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No response from server',
+      );
+    } on DioException catch (e) {
+      developer.log('Error syncing beneficiaries: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to sync beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Unexpected error syncing beneficiaries: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred: $e',
+      );
+    }
+  }
+
+  /// GET /beneficiary/list with pagination
+  /// Fetches beneficiaries from server with pagination support
+  Future<DataResponse<PaginatedResponse<Map<String, dynamic>>>> getBeneficiaryListPaginated({
+    int page = 1,
+    int limit = 50,
+  }) async {
+    try {
+      developer.log('Fetching paginated beneficiary list - page: $page, limit: $limit', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.beneficiaryList,
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+        },
+      );
+      
+      if (response.data != null) {
+        final paginatedResponse = PaginatedResponse<Map<String, dynamic>>.fromJson(
+          response.data,
+          (json) => json,
+        );
+        
+        developer.log(
+          'Fetched ${paginatedResponse.data.length} beneficiaries (page $page/${paginatedResponse.totalPages})',
+          name: 'DataService',
+        );
+        
+        return DataResponse(
+          success: true,
+          data: paginatedResponse,
+          message: 'Beneficiaries fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching paginated beneficiary list: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// Fetch all beneficiaries by iterating through all pages and store in local database
+  Future<DataResponse<List<Map<String, dynamic>>>> getAllBeneficiariesPaginated({
+    int limit = 50,
+    Function(int currentRecords, int totalRecords)? onProgress,
+    bool storeInDatabase = true,
+  }) async {
+    try {
+      developer.log('Starting to fetch all beneficiaries with pagination', name: 'DataService');
+      
+      List<Map<String, dynamic>> allBeneficiaries = [];
+      int currentPage = 1;
+      int totalPages = 1;
+      int totalRecords = 0;
+      
+      // STEP 1: If storing in database, backup unsynced local records
+      List<Beneficiary> unsyncedBackup = [];
+      if (storeInDatabase) {
+        final beneficiaryRepo = BeneficiaryRepository();
+        unsyncedBackup = await beneficiaryRepo.getUnsynced();
+        developer.log('Backed up ${unsyncedBackup.length} unsynced local records before sync', name: 'DataService');
+      }
+      
+      do {
+        final response = await getBeneficiaryListPaginated(page: currentPage, limit: limit);
+        
+        if (!response.success || response.data == null) {
+          return DataResponse(
+            success: false,
+            message: response.message ?? 'Failed to fetch beneficiaries',
+          );
+        }
+        
+        final paginatedData = response.data!;
+        allBeneficiaries.addAll(paginatedData.data);
+        totalPages = paginatedData.totalPages;
+        totalRecords = paginatedData.totalRecords;
+        
+        // Call progress callback with cumulative records downloaded and total records
+        onProgress?.call(allBeneficiaries.length, totalRecords);
+        
+        developer.log(
+          'Fetched page $currentPage/$totalPages (${paginatedData.data.length} items)',
+          name: 'DataService',
+        );
+        
+        currentPage++;
+      } while (currentPage <= totalPages);
+      
+      developer.log(
+        'Successfully fetched all ${allBeneficiaries.length} beneficiaries from $totalPages pages',
+        name: 'DataService',
+      );
+      
+      // Store in local database if requested
+      if (storeInDatabase && allBeneficiaries.isNotEmpty) {
+        try {
+          final beneficiaryRepo = BeneficiaryRepository();
+          
+          // Convert to Beneficiary objects and mark all as synced since they come from server
+          List<Beneficiary> beneficiariesToInsert = [];
+          int skippedCount = 0;
+          
+          for (var i = 0; i < allBeneficiaries.length; i++) {
+            final beneficiaryData = allBeneficiaries[i];
+            try {
+              final beneficiary = Beneficiary.fromJson(beneficiaryData);
+              final beneficiaryWithSyncStatus = beneficiary.copyWith(sIsSync: 1);
+              beneficiariesToInsert.add(beneficiaryWithSyncStatus);
+            } catch (e, stackTrace) {
+              developer.log('Error parsing beneficiary $i: $e', name: 'DataService');
+              developer.log('Stack trace: $stackTrace', name: 'DataService');
+              developer.log('Problematic data: $beneficiaryData', name: 'DataService');
+              skippedCount++;
+              // Continue with next beneficiary - don't let one bad record stop the entire sync
+            }
+          }
+          
+          developer.log('========================================', name: 'DataService');
+          developer.log('Beneficiary Parsing Summary:', name: 'DataService');
+          developer.log('Total fetched: ${allBeneficiaries.length}', name: 'DataService');
+          developer.log('Successfully parsed: ${beneficiariesToInsert.length}', name: 'DataService');
+          developer.log('Skipped/Failed: $skippedCount', name: 'DataService');
+          developer.log('========================================', name: 'DataService');
+          
+          // Use bulk insert for better performance and reliability
+          if (beneficiariesToInsert.isNotEmpty) {
+            await beneficiaryRepo.insertBulk(beneficiariesToInsert);
+            developer.log('Stored ${beneficiariesToInsert.length} beneficiaries in local database (marked as synced)', name: 'DataService');
+          } else {
+            developer.log('WARNING: No beneficiaries to insert after parsing!', name: 'DataService');
+          }
+          
+          // STEP 2: Verify unsynced records are still there
+          final unsyncedCountAfter = await beneficiaryRepo.getUnsyncedCount();
+          developer.log('After sync: $unsyncedCountAfter unsynced local records', name: 'DataService');
+          
+          if (unsyncedCountAfter < unsyncedBackup.length) {
+            developer.log('WARNING: Some local records were lost! Restoring...', name: 'DataService');
+            // Restore lost records
+            await beneficiaryRepo.insertBulk(unsyncedBackup);
+            developer.log('Restored ${unsyncedBackup.length} local records', name: 'DataService');
+          } else {
+            developer.log('✅ All local unsynced records preserved', name: 'DataService');
+          }
+        } catch (e, stackTrace) {
+          developer.log('Error storing beneficiaries in database: $e', name: 'DataService');
+          developer.log('Stack trace: $stackTrace', name: 'DataService');
+          // Don't fail the entire operation if database storage fails
+        }
+      }
+      
+      return DataResponse(
+        success: true,
+        data: allBeneficiaries,
+        message: 'All beneficiaries fetched successfully',
+      );
+    } catch (e) {
+      developer.log('Error fetching all beneficiaries: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to fetch all beneficiaries: $e',
+      );
+    }
+  }
+
+  /// POST /beneficiary/list (legacy method for incremental sync)
+  /// Fetches beneficiaries from server with optional last sync date for incremental sync
+  Future<DataResponse<List<Map<String, dynamic>>>> getBeneficiaryList({String? lastSyncDate}) async {
+    try {
+      developer.log('Fetching beneficiary list from server...', name: 'DataService');
+      
+      final payload = <String, dynamic>{};
+      if (lastSyncDate != null) {
+        payload['last_sync_date'] = lastSyncDate;
+        developer.log('Incremental sync from: $lastSyncDate', name: 'DataService');
+      } else {
+        developer.log('Full sync - fetching all beneficiaries', name: 'DataService');
+      }
+      
+      final response = await _dioClient.post(
+        ApiConstants.beneficiaryList,
+        data: payload,
+      );
+      
+      if (response.data != null) {
+        List<Map<String, dynamic>> beneficiaries = [];
+        
+        // Handle different response structures
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            beneficiaries = data.cast<Map<String, dynamic>>();
+          }
+        } else if (response.data is List) {
+          beneficiaries = (response.data as List).cast<Map<String, dynamic>>();
+        }
+        
+        developer.log('Fetched ${beneficiaries.length} beneficiaries from server', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: beneficiaries,
+          message: 'Beneficiaries fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching beneficiary list: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Unexpected error fetching beneficiary list: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred: $e',
+      );
+    }
+  }
+
+  /// Sync beneficiaries from server to local database
+  Future<DataResponse<int>> syncBeneficiariesFromServer({
+    Function(int current, int total)? onProgress,
+  }) async {
+    try {
+      developer.log('Starting beneficiary sync from server...', name: 'DataService');
+      
+      final beneficiaryRepo = BeneficiaryRepository();
+      
+      // Get last sync time from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final lastSyncTimestamp = prefs.getString('last_beneficiary_sync');
+      
+      // Fetch beneficiaries from server (incremental if we have last sync time)
+      final response = await getBeneficiaryList(
+        lastSyncDate: lastSyncTimestamp,
+      );
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch beneficiaries from server',
+        );
+      }
+      
+      final beneficiariesData = response.data!;
+      
+      if (beneficiariesData.isEmpty) {
+        developer.log('No new beneficiaries to sync', name: 'DataService');
+        return DataResponse(
+          success: true,
+          data: 0,
+          message: 'No new beneficiaries to sync',
+        );
+      }
+      
+      // Report progress
+      onProgress?.call(0, beneficiariesData.length);
+      
+      // Convert to Beneficiary objects and store in local database
+      int syncedCount = 0;
+      for (var i = 0; i < beneficiariesData.length; i++) {
+        try {
+          final beneficiaryData = beneficiariesData[i];
+          
+          // Create Beneficiary object from server data
+          // Note: Server data should already have beneficiary_id
+          final beneficiary = Beneficiary.fromJson(beneficiaryData);
+          
+          // Mark as synced since it comes from server
+          final beneficiaryWithSyncStatus = beneficiary.copyWith(sIsSync: 1);
+          
+          // Insert or update in local database
+          await beneficiaryRepo.insert(beneficiaryWithSyncStatus);
+          syncedCount++;
+          
+          // Report progress
+          onProgress?.call(syncedCount, beneficiariesData.length);
+        } catch (e) {
+          developer.log('Error processing beneficiary: $e', name: 'DataService');
+          // Continue with next beneficiary
+        }
+      }
+      
+      developer.log('Successfully synced $syncedCount beneficiaries to local database', name: 'DataService');
+      
+      return DataResponse(
+        success: true,
+        data: syncedCount,
+        message: 'Successfully synced $syncedCount beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Error syncing beneficiaries from server: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync beneficiaries: $e',
+      );
+    }
+  }
+
+  /// POST /beneficiary/bene_sync
+  /// Syncs beneficiary data to server (alternative sync endpoint)
+  /// Uses FormData to support file uploads (images)
+  Future<DataResponse<Map<String, dynamic>>> beneficiaryBeneSync({
+    required List<Map<String, dynamic>> beneficiaries,
+  }) async {
+    try {
+      developer.log('Syncing beneficiaries via bene_sync endpoint...', name: 'DataService');
+      developer.log('Sending ${beneficiaries.length} beneficiaries', name: 'DataService');
+      
+      // Create FormData
+      final formData = FormData();
+      
+      // Determine if we're sending single or multiple beneficiaries
+      final isSingleBeneficiary = beneficiaries.length == 1;
+      
+      // Process each beneficiary
+      for (int i = 0; i < beneficiaries.length; i++) {
+        final beneficiary = beneficiaries[i];
+        
+        // Add all non-file fields
+        beneficiary.forEach((key, value) {
+          if (value != null) {
+            // Check if this is a file path field
+            if (key == 'national_id_attachment' || 
+                key == 'house_pic' || 
+                key == 'cookstove_pic' || 
+                key == 'signature') {
+              // Handle file upload
+              final filePath = value.toString();
+              if (filePath.isNotEmpty && File(filePath).existsSync()) {
+                developer.log('Adding file for $key: $filePath', name: 'DataService');
+                
+                // Use flat format for single beneficiary, array format for multiple
+                final fieldName = isSingleBeneficiary 
+                    ? key 
+                    : 'beneficiaries[$i][$key]';
+                
+                formData.files.add(MapEntry(
+                  fieldName,
+                  MultipartFile.fromFileSync(
+                    filePath,
+                    filename: filePath.split('/').last,
+                  ),
+                ));
+              }
+            } else {
+              // Add regular field
+              // Use flat format for single beneficiary, array format for multiple
+              final fieldName = isSingleBeneficiary 
+                  ? key 
+                  : 'beneficiaries[$i][$key]';
+              
+              formData.fields.add(MapEntry(
+                fieldName,
+                value.toString(),
+              ));
+            }
+          }
+        });
+      }
+      
+      developer.log('========================================', name: 'DataService');
+      developer.log('FormData prepared with ${formData.fields.length} fields and ${formData.files.length} files', name: 'DataService');
+      
+      // Log ALL fields for debugging
+      if (formData.fields.isNotEmpty) {
+        developer.log('--- FormData Fields (${formData.fields.length}) ---', name: 'DataService');
+        for (var field in formData.fields) {
+          developer.log('  ${field.key} = ${field.value}', name: 'DataService');
+        }
+      }
+      
+      // Log ALL files for debugging
+      if (formData.files.isNotEmpty) {
+        developer.log('--- FormData Files (${formData.files.length}) ---', name: 'DataService');
+        for (var file in formData.files) {
+          developer.log('  ${file.key} = ${file.value.filename}', name: 'DataService');
+        }
+      }
+      developer.log('========================================', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.beneficiaryBeneSync,
+        data: formData,
+      );
+      
+      if (response.data != null) {
+        developer.log('Beneficiary bene_sync response received', name: 'DataService');
+        
+        // Parse response
+        final responseData = response.data;
+        
+        // Expected response format: { "success": true, "message": "...", "data": {...} }
+        return DataResponse(
+          success: true,
+          data: responseData is Map<String, dynamic> ? responseData : {},
+          message: responseData['message'] ?? 'Beneficiaries synced successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No response from server',
+      );
+    } on DioException catch (e) {
+      developer.log('Error in beneficiary bene_sync: ${e.message}', name: 'DataService');
+      developer.log('Response data: ${e.response?.data}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to sync beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Unexpected error in beneficiary bene_sync: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred: $e',
+      );
+    }
+  }
+
+  /// POST /beneficiary/Beneficiary_data
+  /// Fetches updated/synced beneficiaries from server after a specific date
+  /// Used for incremental sync after initial full sync (similar to training site update_data)
+  Future<DataResponse<List<Beneficiary>>> getUpdatedBeneficiaries(String lastSyncDate) async {
+    try {
+      final timezone = _getDeviceTimezone();
+      
+      developer.log('Fetching updated beneficiaries since: $lastSyncDate', name: 'DataService');
+      developer.log('Device timezone: $timezone', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.beneficiaryData,
+        data: {
+          'date': lastSyncDate,
+          'timezone': timezone,
+        },
+      );
+      
+      if (response.data != null) {
+        List<Beneficiary> beneficiaries = [];
+        
+        // Handle different response structures
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            beneficiaries = data
+                .map((json) => Beneficiary.fromJson(json))
+                .toList();
+          }
+        } else if (response.data is List) {
+          beneficiaries = (response.data as List)
+              .map((json) => Beneficiary.fromJson(json))
+              .toList();
+        }
+        
+        developer.log('Fetched ${beneficiaries.length} updated beneficiaries', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: beneficiaries,
+          message: 'Updated beneficiaries fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching updated beneficiaries: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch updated beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// Sync updated beneficiaries from server and store in local database
+  /// This method is used for incremental sync after initial full sync
+  Future<DataResponse<int>> syncUpdatedBeneficiaries(String lastSyncDate) async {
+    try {
+      developer.log('Starting incremental sync for beneficiaries...', name: 'DataService');
+      
+      final response = await getUpdatedBeneficiaries(lastSyncDate);
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch updated beneficiaries',
+        );
+      }
+      
+      final beneficiaries = response.data!;
+      
+      if (beneficiaries.isNotEmpty) {
+        final beneficiaryRepo = BeneficiaryRepository();
+        
+        // Mark all as synced since they come from server
+        final beneficiariesWithSyncStatus = beneficiaries.map((beneficiary) => 
+          beneficiary.copyWith(sIsSync: 1)
+        ).toList();
+        
+        for (var beneficiary in beneficiariesWithSyncStatus) {
+          await beneficiaryRepo.insert(beneficiary);
+        }
+        
+        developer.log('Successfully synced ${beneficiaries.length} updated beneficiaries', name: 'DataService');
+      } else {
+        developer.log('No updated beneficiaries found', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: beneficiaries.length,
+        message: beneficiaries.isEmpty 
+            ? 'No new updates available' 
+            : 'Successfully synced ${beneficiaries.length} updated beneficiaries',
+      );
+    } catch (e) {
+      developer.log('Error syncing updated beneficiaries: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync updated beneficiaries: $e',
       );
     }
   }

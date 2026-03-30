@@ -5,6 +5,7 @@ import 'package:irise/route/app_routes.dart';
 import 'package:irise/providers/dashboard_provider.dart';
 import 'package:irise/view/widgets/sync_data_bottom_sheet.dart';
 import 'package:irise/data/services/data_service.dart';
+import 'package:irise/core/services/connectivity_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -14,11 +15,49 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  bool _hasShownConnectivitySnackbar = false;
+
   @override
   void initState() {
     super.initState();
     // Load dashboard data when screen initializes
     _loadData();
+    // Check connectivity and show snackbar if needed
+    _checkInitialConnectivity();
+  }
+
+  void _checkInitialConnectivity() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_hasShownConnectivitySnackbar) {
+        final connectivityService = Provider.of<ConnectivityService>(context, listen: false);
+        if (!connectivityService.isConnected) {
+          _hasShownConnectivitySnackbar = true;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.wifi_off, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No internet connection',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    });
   }
 
   void _loadData() {
@@ -134,19 +173,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               const SizedBox(height: 4),
                               // Show sync time only if data has been synced
-                              if (dashboardProvider.lastTrainingSiteSync != null)
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time,
-                                        size: 14, color: Color(0xFF4CAF50)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      dashboardProvider.getLastSyncTimeDetailed('training'),
-                                      style: const TextStyle(
-                                          fontSize: 13, color: Color(0xFF4CAF50)),
-                                    ),
-                                  ],
-                                ),
+                              // if (dashboardProvider.lastTrainingSiteSync != null)
+                              //   Row(
+                              //     children: [
+                              //       const Icon(Icons.access_time,
+                              //           size: 14, color: Color(0xFF4CAF50)),
+                              //       const SizedBox(width: 4),
+                              //       Text(
+                              //         dashboardProvider.getLastSyncTimeDetailed('training'),
+                              //         style: const TextStyle(
+                              //             fontSize: 13, color: Color(0xFF4CAF50)),
+                              //       ),
+                              //     ],
+                              //   ),
                               const SizedBox(height: 16),
 
                               // Training
@@ -269,7 +308,25 @@ class _DataOverviewCard extends StatelessWidget {
       moduleName = 'Data';
     }
 
-    // Only handle Training module with new sync logic
+    // Check if trying to sync Beneficiary without Training data
+    if (title.contains('BENEFICIARY')) {
+      // Check if training data has been synced
+      if (dashboardProvider.lastTrainingSiteSync == null) {
+        // Training data not synced yet - show error message
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please sync Training Data first before syncing Beneficiary Data'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    // Handle Training module with new sync logic
     if (title.contains('TRAINING')) {
       // Show sync bottom sheet with proper UI
       final result = await showSyncDataBottomSheet(
@@ -396,6 +453,74 @@ class _DataOverviewCard extends StatelessWidget {
           ),
         );
       }
+    } else if (title.contains('BENEFICIARY')) {
+      // Handle Beneficiary module with pagination sync
+      final result = await showSyncDataBottomSheet(
+        context: context,
+        moduleName: moduleName,
+        onCheckForData: () async {
+          // Get existing count from database
+          final existingCount = dashboardProvider.totalBeneficiaries;
+          
+          // Always show that we need to check for new data
+          // The pagination will handle fetching all pages
+          return SyncCheckResult(
+            hasNewData: true,
+            newRecordsCount: 0, // Will be determined during download
+            existingRecords: existingCount,
+            message: 'Checking for updates...',
+          );
+        },
+        onDownload: (onProgress) async {
+          try {
+            // Get existing count before sync
+            final existingCount = dashboardProvider.totalBeneficiaries;
+            
+            // Track total records from server
+            int totalRecordsFromServer = 0;
+            
+            // Perform sync with real-time progress updates
+            final result = await dashboardProvider.syncBeneficiaries(
+              onProgress: (status, current, total) {
+                if (total > 0) {
+                  totalRecordsFromServer = total;
+                  final remaining = total - current;
+                  
+                  // Update progress: existing, downloaded, remaining
+                  onProgress(existingCount, current, remaining);
+                }
+              },
+            );
+            
+            if (result.success) {
+              // Refresh dashboard data to get actual counts
+              await dashboardProvider.refreshData();
+              
+              // Final progress update - all downloaded, 0 remaining
+              if (totalRecordsFromServer > 0) {
+                onProgress(existingCount, totalRecordsFromServer, 0);
+              }
+              
+              return true;
+            }
+            
+            return false;
+          } catch (e) {
+            return false;
+          }
+        },
+      );
+
+      // Show result message if sync was successful
+      if (result == true && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$moduleName data synced successfully!'),
+            backgroundColor: const Color(0xFF4CAF50),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } else {
       // For other modules, use the old sync bottom sheet
       final result = await showSyncDataBottomSheet(
@@ -456,14 +581,7 @@ class _DataOverviewCard extends StatelessWidget {
                   letterSpacing: 0.3,
                 ),
               ),
-              // Container(
-              //   padding: const EdgeInsets.all(4),
-              //   decoration: BoxDecoration(
-              //     border: Border.all(color: Colors.black26),
-              //     borderRadius: BorderRadius.circular(6),
-              //   ),
-              //   child: const Icon(Icons.sync, size: 16, color: Colors.black54),
-              // ),
+              
             ],
           ),
           const SizedBox(height: 12),

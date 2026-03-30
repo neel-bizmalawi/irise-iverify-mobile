@@ -21,6 +21,7 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
   final _peopleController = TextEditingController();
   final _pageController = PageController();
   DateTime _selectedDate = DateTime.now(); // Auto-fill with current date
+  bool _isNumberOfPeopleValid = false; // Track if number of people is entered
 
   final List<_StepData> _steps = [
     _StepData(
@@ -110,7 +111,23 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Add listener to track changes in the number of people field
+    _peopleController.addListener(_validateNumberOfPeople);
+  }
+
+  void _validateNumberOfPeople() {
+    final text = _peopleController.text.trim();
+    final number = int.tryParse(text);
+    setState(() {
+      _isNumberOfPeopleValid = text.isNotEmpty && number != null && number > 0;
+    });
+  }
+
+  @override
   void dispose() {
+    _peopleController.removeListener(_validateNumberOfPeople);
     _peopleController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -356,10 +373,12 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
                   flex: _currentStep > 0 ? 2 : 1,
                   child: ElevatedButton(
                     onPressed: _currentStep == _steps.length - 1
-                        ? _handleUpdateDetails
+                        ? (_isNumberOfPeopleValid ? _handleUpdateDetails : null)
                         : _nextStep,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
+                      backgroundColor: _currentStep == _steps.length - 1 && !_isNumberOfPeopleValid
+                          ? Colors.grey
+                          : const Color(0xFF4CAF50),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

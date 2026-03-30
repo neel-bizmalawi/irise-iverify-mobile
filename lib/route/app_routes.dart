@@ -22,7 +22,10 @@ class AppRoutes {
       '/training_point_identification';
   static const String training_site = '/training_site';
   static const String beneficiary_list = '/beneficiary_list';
+  static const String beneficiary_registration = '/beneficiary_registration';
   static const String conduct_training_list = '/conduct_training_list';
+  static const String household = '/household';
+  static const String editHousehold = '/edit_household';
   // Profile / Settings
   static const String profile = '/profile';
   static const String notifications = '/notifications';

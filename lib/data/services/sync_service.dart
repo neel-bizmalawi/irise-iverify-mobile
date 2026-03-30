@@ -129,19 +129,87 @@ class SyncService {
     try {
       developer.log('Starting sync to server...', name: 'SyncService');
       
-      int syncedCount = 0;
-      final pendingItems = await _syncQueueRepo.getPendingItems();
+      int trainingSitesSynced = 0;
+      int beneficiariesSynced = 0;
+      int trainingsSynced = 0;
 
+      // Sync unsynced training sites
+      final unsyncedSites = await _trainingSiteRepo.getUnsynced();
+      if (unsyncedSites.isNotEmpty) {
+        developer.log('Syncing ${unsyncedSites.length} training sites to server...', name: 'SyncService');
+        
+        final sitesPayload = unsyncedSites.map((site) => site.toApiJson()).toList();
+        final response = await _dataService.syncTrainingSites(sitesPayload);
+        
+        if (response.success && response.data != null) {
+          // Mark sites as synced
+          for (var site in unsyncedSites) {
+            if (site.offlineId != null) {
+              await _trainingSiteRepo.update(site.copyWith(sIsSync: 1));
+            }
+          }
+          trainingSitesSynced = unsyncedSites.length;
+          developer.log('Successfully synced $trainingSitesSynced training sites', name: 'SyncService');
+        }
+      }
+
+      // Sync unsynced beneficiaries using the dedicated method
+      final beneficiaryResponse = await _dataService.syncBeneficiariesToServer();
+      if (beneficiaryResponse.success && beneficiaryResponse.data != null) {
+        beneficiariesSynced = beneficiaryResponse.data!['synced'] ?? 0;
+        developer.log('Successfully synced $beneficiariesSynced beneficiaries', name: 'SyncService');
+      }
+
+      // Sync unsynced trainings
+      final unsyncedTrainings = await _trainingRepo.getUnsynced();
+      if (unsyncedTrainings.isNotEmpty) {
+        developer.log('Syncing ${unsyncedTrainings.length} trainings to server...', name: 'SyncService');
+        
+        final trainingsPayload = unsyncedTrainings.map((training) => training.toJson()).toList();
+        final response = await _dataService.syncTrainings(trainingsPayload);
+        
+        if (response.success && response.data != null) {
+          // Mark trainings as synced by updating s_is_sync field
+          for (var training in unsyncedTrainings) {
+            if (training.offlineId != null) {
+              final updatedTraining = Training(
+                trainingId: training.trainingId,
+                trainingPointId: training.trainingPointId,
+                trainingDate: training.trainingDate,
+                trainerName: training.trainerName,
+                participantsCount: training.participantsCount,
+                malesCount: training.malesCount,
+                femalesCount: training.femalesCount,
+                trainingType: training.trainingType,
+                trainingNotes: training.trainingNotes,
+                sIsSync: 1, // Mark as synced
+                createdBy: training.createdBy,
+                modifiedBy: training.modifiedBy,
+                createdDate: training.createdDate,
+                modifiedDate: training.modifiedDate,
+                status: training.status,
+                offlineId: training.offlineId,
+                serverTime: training.serverTime,
+              );
+              await _trainingRepo.update(updatedTraining);
+            }
+          }
+          trainingsSynced = unsyncedTrainings.length;
+          developer.log('Successfully synced $trainingsSynced trainings', name: 'SyncService');
+        }
+      }
+
+      // Process sync queue items
+      int queueSynced = 0;
+      final pendingItems = await _syncQueueRepo.getPendingItems();
       for (var item in pendingItems) {
         try {
-          // Process each queued operation
           final success = await _processSyncItem(item);
           
           if (success) {
             await _syncQueueRepo.removeFromQueue(item['id']);
-            syncedCount++;
+            queueSynced++;
           } else {
-            // Increment retry count
             final retryCount = (item['retry_count'] ?? 0) + 1;
             await _syncQueueRepo.updateRetryCount(
               item['id'],
@@ -160,11 +228,15 @@ class SyncService {
         }
       }
 
-      developer.log('Synced $syncedCount items to server', name: 'SyncService');
+      final totalSynced = trainingSitesSynced + beneficiariesSynced + trainingsSynced + queueSynced;
+      developer.log('Synced $totalSynced items to server', name: 'SyncService');
 
       return SyncResult(
         success: true,
-        syncedToServerCount: syncedCount,
+        trainingSitesCount: trainingSitesSynced,
+        beneficiariesCount: beneficiariesSynced,
+        trainingsCount: trainingsSynced,
+        syncedToServerCount: totalSynced,
       );
     } catch (e) {
       developer.log('Sync to server failed: $e', name: 'SyncService');
@@ -237,9 +309,8 @@ class SyncService {
       final unsyncedBeneficiaries = await _beneficiaryRepo.getUnsynced();
       if (unsyncedBeneficiaries.isNotEmpty) {
         payload['beneficiaries'] = unsyncedBeneficiaries.map((beneficiary) {
-          final json = beneficiary.toJson();
-          json['created_date'] = json['created_date'] ?? DateTime.now().toIso8601String();
-          return json;
+          // Use toJsonForSync() which excludes national_id
+          return beneficiary.toJsonForSync();
         }).toList();
       }
 

@@ -339,18 +339,13 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
                         ),
                       ),
                       Container(
-                        width: 34,
-                        height: 34,
+                        width: 24,
+                        height: 24,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: Colors.black87,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 1,
-                          ),
                         ),
-                        child: const Icon(Icons.question_mark_rounded,
-                            color: Colors.white, size: 18),
+                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
                       ),
                     ],
                   ),
