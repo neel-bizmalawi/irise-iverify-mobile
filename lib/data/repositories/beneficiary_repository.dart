@@ -67,6 +67,36 @@ class BeneficiaryRepository {
     return null;
   }
 
+  /// Get beneficiary by beneficiary_id (server-assigned ID)
+  Future<Beneficiary?> getByBeneficiaryId(int beneficiaryId) async {
+    final db = await _dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'beneficiaries',
+      where: 'beneficiary_id = ?',
+      whereArgs: [beneficiaryId],
+    );
+    
+    if (maps.isNotEmpty) {
+      return Beneficiary.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  /// Get beneficiary by offline_id (locally-assigned ID)
+  Future<Beneficiary?> getByOfflineId(int offlineId) async {
+    final db = await _dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'beneficiaries',
+      where: 'offline_id = ?',
+      whereArgs: [offlineId],
+    );
+    
+    if (maps.isNotEmpty) {
+      return Beneficiary.fromMap(maps.first);
+    }
+    return null;
+  }
+
   Future<int> update(Beneficiary beneficiary) async {
     final db = await _dbHelper.database;
     try {
@@ -256,6 +286,34 @@ class BeneficiaryRepository {
   Future<int> updateWithServerId(int offlineId, int beneficiaryId) async {
     final db = await _dbHelper.database;
     try {
+      developer.log('Updating beneficiary with server ID - offline_id: $offlineId, beneficiary_id: $beneficiaryId', name: 'BeneficiaryRepository');
+      
+      // First check if this beneficiary_id already exists
+      final existingWithBeneficiaryId = await db.query(
+        'beneficiaries',
+        where: 'beneficiary_id = ?',
+        whereArgs: [beneficiaryId],
+      );
+      
+      if (existingWithBeneficiaryId.isNotEmpty) {
+        final existing = Beneficiary.fromMap(existingWithBeneficiaryId.first);
+        developer.log('⚠️ WARNING: beneficiary_id $beneficiaryId already exists!', name: 'BeneficiaryRepository');
+        developer.log('Existing record: offline_id=${existing.offlineId}, beneficiary_id=${existing.beneficiaryId}, name=${existing.firstName} ${existing.lastName}', name: 'BeneficiaryRepository');
+        
+        // Check if it's the same record (same offline_id)
+        if (existing.offlineId == offlineId) {
+          developer.log('Same record, just marking as synced', name: 'BeneficiaryRepository');
+          return await db.update(
+            'beneficiaries',
+            {'s_is_sync': 1},
+            where: 'offline_id = ?',
+            whereArgs: [offlineId],
+          );
+        } else {
+          throw Exception('beneficiary_id $beneficiaryId already exists for a different record (offline_id: ${existing.offlineId})');
+        }
+      }
+      
       // Update with server ID and mark as synced
       // Do NOT update modified_date - it should only change when record is edited
       return await db.update(

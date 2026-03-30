@@ -199,8 +199,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
         // Always mark as synced after successful sync
         developer.log('Marking beneficiary as synced...', name: 'BeneficiaryList');
         
-        if (beneficiary.offlineId != null && beneficiaryId != null) {
-          // Has offline_id and got beneficiary_id from server - update with server ID
+        if (beneficiary.offlineId != null && beneficiaryId != null && beneficiary.beneficiaryId == null) {
+          // Has offline_id, got beneficiary_id from server, and doesn't already have beneficiary_id - update with server ID
           developer.log('Updating offline_id ${beneficiary.offlineId} with server beneficiary_id: $beneficiaryId', name: 'BeneficiaryList');
           await _beneficiaryRepo.updateWithServerId(beneficiary.offlineId!, beneficiaryId);
         } else {
@@ -701,21 +701,20 @@ class _BeneficiaryCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            // Edit Icon - only show if there are missing fields
-                            if (missing.isNotEmpty)
-                              GestureDetector(
-                                onTap: () async {
-                                  // Navigate to edit screen
-                                  await context.push(
-                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
-                                  );
-                                },
-                                child: const Icon(
-                                  Icons.edit_note,
-                                  color: Colors.black54,
-                                  size: 24,
-                                ),
+                            // Edit Icon - always show
+                            GestureDetector(
+                              onTap: () async {
+                                // Navigate to edit screen
+                                await context.push(
+                                  '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
+                                );
+                              },
+                              child: const Icon(
+                                Icons.edit_note,
+                                color: Colors.black54,
+                                size: 24,
                               ),
+                            ),
                           ],
                         ),
                       ],

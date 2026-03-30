@@ -195,6 +195,9 @@ class Beneficiary {
 
   // Convert to JSON for API sync (exclude offline_id)
   Map<String, dynamic> toJsonForSync() {
+    // Determine if this is a new record (no beneficiary_id) or an update (has beneficiary_id)
+    final isNewRecord = beneficiaryId == null;
+    
     return {
       if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       'training_site': trainingSite,
@@ -232,8 +235,10 @@ class Beneficiary {
       'latitude': latitude,
       'longitude': longitude,
       'geo_address': geoAddress,
-      'created_date': createdDate,
-      'created_by': createdBy,
+      // Only send created_date and created_by for new records (first sync)
+      if (isNewRecord) 'created_date': createdDate,
+      if (isNewRecord) 'created_by': createdBy,
+      // Always send modified_date and modified_by
       'modified_date': modifiedDate,
       'modified_by': modifiedBy,
       'status': status,

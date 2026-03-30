@@ -150,11 +150,21 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         );
       }
       
-      // Reload complete beneficiary data from database
-      final reloadedBeneficiary = await _beneficiaryRepo.getById(household.id!);
-      if (reloadedBeneficiary == null) {
-        throw Exception('Failed to reload beneficiary data');
+      // Reload complete beneficiary data from database using beneficiary_id or offline_id
+      // IMPORTANT: Use beneficiary_id if it exists, otherwise use offline_id
+      final lookupId = household.beneficiaryId ?? household.offlineId;
+      if (lookupId == null) {
+        throw Exception('Beneficiary has no beneficiary_id or offline_id');
       }
+      
+      developer.log('Reloading beneficiary for sync using ID: $lookupId (beneficiary_id: ${household.beneficiaryId}, offline_id: ${household.offlineId})', name: 'HouseholdScreen');
+      
+      final reloadedBeneficiary = await _beneficiaryRepo.getById(lookupId);
+      if (reloadedBeneficiary == null) {
+        throw Exception('Failed to reload beneficiary data for ID: $lookupId');
+      }
+      
+      developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'HouseholdScreen');
       
       // Convert beneficiary to JSON for sync (send complete data from local DB)
       final beneficiaryJson = reloadedBeneficiary.toJsonForSync();
@@ -509,9 +519,6 @@ class _HouseholdTile extends StatelessWidget {
     if (household.housePic == null || household.housePic!.isEmpty) missing.add('House Image');
     if (household.cookstovePic == null || household.cookstovePic!.isEmpty) missing.add('Cookstove Image');
     
-    // Household is editable only if there are missing fields
-    final bool isEditable = missing.isNotEmpty;
-    
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -622,22 +629,18 @@ class _HouseholdTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  // Edit Icon (only enabled if there are missing fields)
+                  // Edit Icon (always enabled)
                   GestureDetector(
-                    onTap: isEditable ? onTap : null,
+                    onTap: onTap,
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isEditable 
-                            ? const Color(0xFFE8F5E9) 
-                            : Colors.grey.shade200,
+                        color: const Color(0xFFE8F5E9),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.edit,
-                        color: isEditable 
-                            ? const Color(0xFF4CAF50) 
-                            : Colors.grey.shade400,
+                        color: Color(0xFF4CAF50),
                         size: 15,
                       ),
                     ),

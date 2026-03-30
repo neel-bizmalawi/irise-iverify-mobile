@@ -6,6 +6,7 @@ import 'package:irise/core/utils/image_utils.dart';
 import 'package:irise/core/storage/token_storage.dart';
 import 'package:irise/core/constants/api_constants.dart';
 import 'package:irise/data/services/data_service.dart';
+import 'package:irise/view/widgets/network_image_with_retry.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -104,20 +105,32 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     try {
       developer.log('Loading beneficiary with ID: ${widget.householdId}', name: 'EditHouseholdScreen');
       
-      // Try to parse as beneficiary_id first, then as offline_id
-      final beneficiaryId = int.tryParse(widget.householdId!);
+      // Try to parse as beneficiary_id or offline_id
+      final id = int.tryParse(widget.householdId!);
       
-      if (beneficiaryId != null) {
-        // Try to find by beneficiary_id first
-        final beneficiaries = await _beneficiaryRepo.getAll();
-        _beneficiary = beneficiaries.firstWhere(
-          (b) => b.beneficiaryId == beneficiaryId || b.offlineId == beneficiaryId,
-          orElse: () => beneficiaries.first,
-        );
+      if (id != null) {
+        // Use getById which properly queries by beneficiary_id OR offline_id
+        _beneficiary = await _beneficiaryRepo.getById(id);
+        
+        if (_beneficiary == null) {
+          developer.log('Beneficiary not found with ID: $id', name: 'EditHouseholdScreen');
+          setState(() => _isLoading = false);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Beneficiary not found'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            context.pop();
+          }
+          return;
+        }
       }
       
       if (_beneficiary != null) {
-        developer.log('Loaded beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
+        developer.log('Loaded beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName} (beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId})', name: 'EditHouseholdScreen');
         
         // Populate form fields
         _cookStoveDetailsController.text = _beneficiary!.cookingMethod ?? '';
@@ -129,8 +142,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         _houseImagePath = _beneficiary!.housePic;
         _houseImageTimestamp = _beneficiary!.housePicTimestamp;
         if (_houseImagePath != null) {
-          // Check if it's a server path (starts with /) or local file path
-          if (_houseImagePath!.startsWith('/')) {
+          // Check if it's a server path (starts with /uploads/) or local file path
+          if (_houseImagePath!.startsWith('/uploads/')) {
             // Server path - don't load as File, will display using network image
             _houseImage = null;
           } else if (File(_houseImagePath!).existsSync()) {
@@ -142,8 +155,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         _cookStoveImagePath = _beneficiary!.cookstovePic;
         _cookStoveImageTimestamp = _beneficiary!.cookstovePicTimestamp;
         if (_cookStoveImagePath != null) {
-          // Check if it's a server path (starts with /) or local file path
-          if (_cookStoveImagePath!.startsWith('/')) {
+          // Check if it's a server path (starts with /uploads/) or local file path
+          if (_cookStoveImagePath!.startsWith('/uploads/')) {
             // Server path - don't load as File, will display using network image
             _cookStoveImage = null;
           } else if (File(_cookStoveImagePath!).existsSync()) {
@@ -484,12 +497,30 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         return;
       }
       
-      // Check for duplicate Device Serial Number
+      // Check for duplicate Device Serial Number (double-check before saving)
       if (_isDeviceSerialNoDuplicate) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Device Serial No already exists. Please use a different one.'),
             backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      // Final check: Verify Device Serial No doesn't exist in database
+      final deviceSerialNoExists = await _beneficiaryRepo.isDeviceSerialNoExists(
+        _deviceSerialNoController.text.trim(),
+        excludeBeneficiaryId: _beneficiary?.beneficiaryId,
+        excludeOfflineId: _beneficiary?.offlineId,
+      );
+      
+      if (deviceSerialNoExists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device Serial No already exists. Please use a different one.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
         return;
@@ -541,6 +572,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       try {
         developer.log('========================================', name: 'EditHouseholdScreen');
         developer.log('Saving household changes...', name: 'EditHouseholdScreen');
+        developer.log('Beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
         developer.log('Before update - beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId}, s_is_sync: ${_beneficiary!.sIsSync}', name: 'EditHouseholdScreen');
         
         // Get user ID from token storage
@@ -576,9 +608,10 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         developer.log('Household saved successfully to database', name: 'EditHouseholdScreen');
         
         // Reload the complete beneficiary data from database for potential sync
-        final reloadedBeneficiary = await _beneficiaryRepo.getById(updatedBeneficiary.id!);
+        final reloadedBeneficiary = await _beneficiaryRepo.getById(updatedBeneficiary.beneficiaryId ?? updatedBeneficiary.offlineId!);
         if (reloadedBeneficiary != null) {
           developer.log('Reloaded complete beneficiary data from database', name: 'EditHouseholdScreen');
+          developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'EditHouseholdScreen');
           developer.log('Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}', name: 'EditHouseholdScreen');
         }
         
@@ -639,10 +672,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
       
       // Reload complete beneficiary data from database
-      final reloadedBeneficiary = await _beneficiaryRepo.getById(_beneficiary!.id!);
+      final reloadedBeneficiary = await _beneficiaryRepo.getById(_beneficiary!.beneficiaryId ?? _beneficiary!.offlineId!);
       if (reloadedBeneficiary == null) {
         throw Exception('Failed to reload beneficiary data');
       }
+      
+      developer.log('Reloaded beneficiary for sync - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'EditHouseholdScreen');
       
       // Convert beneficiary to JSON for sync (send complete data from local DB)
       final beneficiaryJson = reloadedBeneficiary.toJsonForSync();
@@ -848,8 +883,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildCookStoveDetailsSection(),
-                          const SizedBox(height: 20),
+                          // _buildCookStoveDetailsSection(),
+                          // const SizedBox(height: 20),
                           _buildDeviceSerialNoSection(),
                           const SizedBox(height: 20),
                           _buildGPSSection(),
@@ -959,6 +994,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                 ),
               ),
               child: TextFormField(
+                cursorColor: Colors.green,
                 controller: _deviceSerialNoController,
                 decoration: const InputDecoration(
                   hintText: 'Enter Device Serial No (A-Z, 0-9)',
@@ -1124,7 +1160,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       imagePath = _cookStoveImagePath;
     }
     
-    final bool hasServerImage = imagePath != null && imagePath.startsWith('/');
+    final bool hasServerImage = imagePath != null && imagePath.startsWith('/uploads/');
     final bool hasLocalImage = image != null;
     final bool hasAnyImage = hasServerImage || hasLocalImage;
     
@@ -1196,41 +1232,9 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                               borderRadius: BorderRadius.circular(8),
                               child: hasLocalImage
                                   ? Image.file(image, fit: BoxFit.cover)
-                                  : Image.network(
-                                      '${ApiConstants.baseUrl}$imagePath',
+                                  : NetworkImageWithRetry(
+                                      imageUrl: '${ApiConstants.baseUrl}$imagePath',
                                       fit: BoxFit.cover,
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return Center(
-                                          child: CircularProgressIndicator(
-                                            value: loadingProgress.expectedTotalBytes != null
-                                                ? loadingProgress.cumulativeBytesLoaded /
-                                                    loadingProgress.expectedTotalBytes!
-                                                : null,
-                                            valueColor: const AlwaysStoppedAnimation<Color>(
-                                                Color(0xFF4CAF50)),
-                                          ),
-                                        );
-                                      },
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Center(
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.error_outline,
-                                                  size: 40, color: Colors.grey.shade400),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Failed to load image',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
                                     ),
                             )
                           : Center(

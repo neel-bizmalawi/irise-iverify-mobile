@@ -728,7 +728,7 @@ class _TrainingPointIdentificationScreenState
                         _buildTextField(
                           controller: _trainingSiteNameController,
                           hint: 'Enter Training site name',
-                          allowNumbers: false, // Don't allow numbers
+                          // Allow alphabets, numbers, and basic symbols (default behavior)
                         ),
                         const SizedBox(height: 8),
                         // ── DISTRICT ──
@@ -792,6 +792,7 @@ class _TrainingPointIdentificationScreenState
                                     controller: _householdCountController,
                                     keyboardType: TextInputType.number,
                                     hint: 'Enter count',
+                                    numbersOnly: true, // Only positive numbers
                                   ),
                                 ],
                               ),
@@ -807,6 +808,7 @@ class _TrainingPointIdentificationScreenState
                                     controller: _cookstoveCountController,
                                     keyboardType: TextInputType.number,
                                     hint: 'Enter count',
+                                    numbersOnly: true, // Only positive numbers
                                   ),
                                 ],
                               ),
@@ -828,6 +830,7 @@ class _TrainingPointIdentificationScreenState
                                     controller: _householdRadiusController,
                                     keyboardType: TextInputType.number,
                                     hint: 'Enter radius',
+                                    numbersOnly: true, // Only positive numbers
                                   ),
                                 ],
                               ),
@@ -843,6 +846,7 @@ class _TrainingPointIdentificationScreenState
                                     controller: _totalPopulationController,
                                     keyboardType: TextInputType.number,
                                     hint: 'Enter population',
+                                    numbersOnly: true, // Only positive numbers
                                   ),
                                 ],
                               ),
@@ -1073,18 +1077,28 @@ class _TrainingPointIdentificationScreenState
     String? hint,
     TextInputType keyboardType = TextInputType.text,
     bool allowNumbers = true,
+    bool numbersOnly = false,
   }) {
+    List<TextInputFormatter>? formatters;
+    
+    if (numbersOnly) {
+      // Only positive numbers allowed
+      formatters = [
+        FilteringTextInputFormatter.digitsOnly, // Only digits
+      ];
+    } else if (!allowNumbers) {
+      // Only alphabets and spaces (for names)
+      formatters = [
+        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+      ];
+    }
+    
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       cursorColor: const Color(0xFF4CAF50),
       style: const TextStyle(fontSize: 14, color: Colors.black87),
-      inputFormatters: allowNumbers 
-          ? null 
-          : [
-              // Prevent numbers from being entered
-              FilteringTextInputFormatter.deny(RegExp(r'[0-9]')),
-            ],
+      inputFormatters: formatters,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),

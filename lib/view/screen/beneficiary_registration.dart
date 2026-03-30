@@ -3,11 +3,13 @@ import 'package:go_router/go_router.dart';
 import 'package:irise/data/repositories/language_repository.dart';
 import 'package:irise/data/repositories/training_site_list_repository.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
+import 'package:irise/data/repositories/cookstove_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/core/storage/token_storage.dart';
 import 'package:irise/core/constants/api_constants.dart';
 import 'package:irise/view/widgets/searchable_dropdown.dart';
 import 'package:irise/view/widgets/simple_dropdown.dart';
+import 'package:irise/view/widgets/network_image_with_retry.dart';
 import 'package:irise/core/utils/image_utils.dart';
 import 'package:syncfusion_flutter_signaturepad/signaturepad.dart';
 import 'package:path_provider/path_provider.dart';
@@ -35,6 +37,7 @@ class _BeneficiaryRegistrationScreenState
   final _languageRepo = LanguageRepository();
   final _trainingSiteListRepo = TrainingSiteListRepository();
   final _beneficiaryRepo = BeneficiaryRepository();
+  final _cookstoveRepo = CookstoveRepository();
   final _tokenStorage = TokenStorage();
   final _imagePicker = ImagePicker();
 
@@ -59,7 +62,7 @@ class _BeneficiaryRegistrationScreenState
   // Dropdown data from database
   List<String> _trainingSites = [];
   List<String> _languages = ['English'];
-  List<String> _cookingMethods = ['Firewood', 'Charcoal', 'Gas', 'Electric', 'Other'];
+  List<String> _cookingMethods = []; // Will be loaded from database
 
   // Toggles
   bool _readDoc = false;
@@ -138,8 +141,8 @@ class _BeneficiaryRegistrationScreenState
 
             // Load images
             if (beneficiary.nationalIdAttachment != null) {
-              // Check if it's a server path (starts with /) or local file path
-              if (beneficiary.nationalIdAttachment!.startsWith('/')) {
+              // Check if it's a server path (starts with /uploads/) or local file path
+              if (beneficiary.nationalIdAttachment!.startsWith('/uploads/')) {
                 // Server path - don't load as File, will display using network image
                 _nationalIdImage = null;
               } else if (File(beneficiary.nationalIdAttachment!).existsSync()) {
@@ -149,8 +152,8 @@ class _BeneficiaryRegistrationScreenState
               _nationalIdTimestamp = beneficiary.nationalIdTimestamp;
             }
             if (beneficiary.signature != null) {
-              // Check if it's a server path (starts with /) or local file path
-              if (beneficiary.signature!.startsWith('/')) {
+              // Check if it's a server path (starts with /uploads/) or local file path
+              if (beneficiary.signature!.startsWith('/uploads/')) {
                 // Server path - don't load as File, will display using network image
                 _signatureImage = null;
               } else if (File(beneficiary.signature!).existsSync()) {
@@ -212,6 +215,7 @@ class _BeneficiaryRegistrationScreenState
 
       final languages = await _languageRepo.getAll();
       final trainingSites = await _trainingSiteListRepo.getAll();
+      final cookstoves = await _cookstoveRepo.getAll();
 
       setState(() {
         _languages = languages.map((l) => l.langName).toList();
@@ -220,12 +224,14 @@ class _BeneficiaryRegistrationScreenState
         }
 
         _trainingSites = trainingSites.map((t) => t.trainingSite).toList();
+        
+        _cookingMethods = cookstoves.map((c) => c.cookstoveName).toList();
 
         _isLoading = false;
       });
 
       developer.log(
-          'Loaded ${_languages.length} languages, ${_trainingSites.length} training sites',
+          'Loaded ${_languages.length} languages, ${_trainingSites.length} training sites, ${_cookingMethods.length} cooking methods',
           name: 'BeneficiaryRegistration');
     } catch (e) {
       developer.log('Error loading dropdown data: $e',
@@ -488,13 +494,60 @@ class _BeneficiaryRegistrationScreenState
         return;
       }
 
-      // Check for duplicate National ID
+      // Check for duplicate National ID (double-check before saving)
       if (_isNationalIdDuplicate) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
                 'National ID already exists. Please use a different one.'),
             backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      // Final check: Verify National ID doesn't exist in database
+      final nationalIdExists = await _beneficiaryRepo.isNationalIdExists(
+        _nationalIdController.text.trim(),
+        excludeBeneficiaryId: _existingBeneficiary?.beneficiaryId,
+        excludeOfflineId: _existingBeneficiary?.offlineId,
+      );
+      
+      if (nationalIdExists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'National ID already exists. Please use a different one.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      
+      // Validate National ID attachment is captured
+      if (_nationalIdImage == null && 
+          (_existingBeneficiary?.nationalIdAttachment == null || 
+           _existingBeneficiary!.nationalIdAttachment!.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('National ID image is required. Please capture National ID image.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      
+      // Validate Signature is captured
+      if (_signatureImage == null && 
+          (_existingBeneficiary?.signature == null || 
+           _existingBeneficiary!.signature!.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Signature is required. Please capture signature.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
         return;
@@ -1405,7 +1458,7 @@ class _BeneficiaryRegistrationScreenState
   }) {
     // Determine if we should display an image from server
     final String? imagePath = _getImagePathForTitle(title);
-    final bool hasServerImage = imagePath != null && imagePath.startsWith('/');
+    final bool hasServerImage = imagePath != null && imagePath.startsWith('/uploads/');
     final bool hasLocalImage = image != null;
     final bool hasAnyImage = hasServerImage || hasLocalImage;
     
@@ -1463,47 +1516,11 @@ class _BeneficiaryRegistrationScreenState
                           height: 150,
                           width: double.infinity,
                           fit: BoxFit.cover)
-                      : Image.network(
-                          '${ApiConstants.baseUrl}$imagePath',
+                      : NetworkImageWithRetry(
+                          imageUrl: '${ApiConstants.baseUrl}$imagePath',
                           height: 150,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 150,
-                              alignment: Alignment.center,
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF4CAF50)),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 150,
-                              color: Colors.grey.shade200,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error_outline,
-                                      size: 40, color: Colors.grey.shade400),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Failed to load image',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
                         ),
                 ),
                 if (timestamp != null) ...[
@@ -1802,7 +1819,7 @@ class _BeneficiaryRegistrationScreenState
   Widget _buildSignatureSection() {
     // Check if we have a server signature image
     final String? signaturePath = _existingBeneficiary?.signature;
-    final bool hasServerSignature = signaturePath != null && signaturePath.startsWith('/');
+    final bool hasServerSignature = signaturePath != null && signaturePath.startsWith('/uploads/');
     final bool hasLocalSignature = _signatureImage != null;
     final bool hasAnySignature = hasServerSignature || hasLocalSignature;
     
@@ -1841,47 +1858,11 @@ class _BeneficiaryRegistrationScreenState
                           fit: BoxFit.contain,
                           color: Colors.white,
                           colorBlendMode: BlendMode.darken)
-                      : Image.network(
-                          '${ApiConstants.baseUrl}$signaturePath',
+                      : NetworkImageWithRetry(
+                          imageUrl: '${ApiConstants.baseUrl}$signaturePath',
                           height: 150,
                           width: double.infinity,
                           fit: BoxFit.contain,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 150,
-                              alignment: Alignment.center,
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF4CAF50)),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 150,
-                              color: Colors.grey.shade200,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error_outline,
-                                      size: 40, color: Colors.grey.shade400),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Failed to load signature',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
                         ),
                 ),
                 if (_signatureTimestamp != null) ...[
