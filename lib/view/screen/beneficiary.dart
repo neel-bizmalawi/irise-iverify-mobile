@@ -727,8 +727,8 @@ class _BeneficiaryCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            // Edit Icon - only show if NOT synced with server
-                            if (beneficiary.sIsSync == 0)
+                            // Edit Icon - show if NOT synced OR if there are missing fields
+                            if (beneficiary.sIsSync == 0 || missing.isNotEmpty)
                               GestureDetector(
                                 onTap: () async {
                                   // Navigate to edit screen

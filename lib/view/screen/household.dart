@@ -674,8 +674,8 @@ class _HouseholdTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  // Edit Icon (only show if NOT synced with server)
-                  if (household.sIsSync == 0)
+                  // Edit Icon (show if NOT synced OR if there are missing fields)
+                  if (household.sIsSync == 0 || missing.isNotEmpty)
                     GestureDetector(
                       onTap: onTap,
                       child: Container(
