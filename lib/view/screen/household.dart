@@ -266,11 +266,18 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           );
         }
       } else {
+        // Extract user-friendly error message from response
+        String errorMessage = response.message ?? 'Sync failed';
+        
+        // Log the full error for debugging
+        developer.log('Sync failed with message: $errorMessage', name: 'HouseholdScreen');
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Sync failed: ${response.message}'),
+              content: Text(errorMessage),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -283,11 +290,24 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         Navigator.of(context).pop();
       }
       
+      // Extract user-friendly error message
+      String errorMessage = 'Error syncing household';
+      
+      // Try to extract message from error string if it contains JSON-like structure
+      final errorStr = e.toString();
+      if (errorStr.contains('message')) {
+        // This might be a structured error, try to extract the message
+        errorMessage = errorStr;
+      } else {
+        errorMessage = 'Error syncing: $errorStr';
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error syncing: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -654,8 +674,8 @@ class _HouseholdTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  // Edit Icon (only show if there are missing fields)
-                  if (missing.isNotEmpty)
+                  // Edit Icon (only show if NOT synced with server)
+                  if (household.sIsSync == 0)
                     GestureDetector(
                       onTap: onTap,
                       child: Container(

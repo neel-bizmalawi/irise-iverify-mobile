@@ -265,66 +265,9 @@ class _BeneficiaryRegistrationScreenState
 
   Future<void> _takePhoto(String type) async {
     try {
-      // Show bottom sheet to choose camera or gallery
-      final source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (context) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Choose Image Source',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child:
-                        const Icon(Icons.camera_alt, color: Color(0xFF4CAF50)),
-                  ),
-                  title: const Text('Camera'),
-                  onTap: () => Navigator.pop(context, ImageSource.camera),
-                ),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.photo_library,
-                        color: Color(0xFF4CAF50)),
-                  ),
-                  title: const Text('Gallery'),
-                  onTap: () => Navigator.pop(context, ImageSource.gallery),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      if (source == null) return;
-
-      // Pick image
+      // Directly use camera (gallery option removed)
       final XFile? pickedFile = await _imagePicker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         maxWidth: 1920,
         maxHeight: 1920,
         imageQuality: 85,
