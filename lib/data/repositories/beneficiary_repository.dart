@@ -338,15 +338,27 @@ class BeneficiaryRepository {
       String whereClause = 'national_id = ?';
       List<dynamic> whereArgs = [nationalId];
       
-      if (excludeBeneficiaryId != null) {
-        whereClause += ' AND beneficiary_id != ?';
-        whereArgs.add(excludeBeneficiaryId);
+      // Build exclusion clause: exclude if EITHER beneficiary_id OR offline_id matches
+      // This handles cases where record has both IDs or only one
+      if (excludeBeneficiaryId != null || excludeOfflineId != null) {
+        whereClause += ' AND NOT (';
+        List<String> exclusionConditions = [];
+        
+        if (excludeBeneficiaryId != null) {
+          exclusionConditions.add('beneficiary_id = ?');
+          whereArgs.add(excludeBeneficiaryId);
+        }
+        
+        if (excludeOfflineId != null) {
+          exclusionConditions.add('offline_id = ?');
+          whereArgs.add(excludeOfflineId);
+        }
+        
+        whereClause += exclusionConditions.join(' OR ');
+        whereClause += ')';
       }
       
-      if (excludeOfflineId != null) {
-        whereClause += ' AND offline_id != ?';
-        whereArgs.add(excludeOfflineId);
-      }
+      developer.log('Checking national ID: "$nationalId" with query: $whereClause, args: $whereArgs', name: 'BeneficiaryRepository');
       
       final result = await db.query(
         'beneficiaries',
@@ -354,6 +366,8 @@ class BeneficiaryRepository {
         whereArgs: whereArgs,
         limit: 1,
       );
+      
+      developer.log('National ID check result: ${result.isNotEmpty ? "EXISTS" : "NOT EXISTS"} (found ${result.length} records)', name: 'BeneficiaryRepository');
       
       return result.isNotEmpty;
     } catch (e) {
@@ -369,15 +383,27 @@ class BeneficiaryRepository {
       String whereClause = 'device_serial_no = ?';
       List<dynamic> whereArgs = [deviceSerialNo];
       
-      if (excludeBeneficiaryId != null) {
-        whereClause += ' AND beneficiary_id != ?';
-        whereArgs.add(excludeBeneficiaryId);
+      // Build exclusion clause: exclude if EITHER beneficiary_id OR offline_id matches
+      // This handles cases where record has both IDs or only one
+      if (excludeBeneficiaryId != null || excludeOfflineId != null) {
+        whereClause += ' AND NOT (';
+        List<String> exclusionConditions = [];
+        
+        if (excludeBeneficiaryId != null) {
+          exclusionConditions.add('beneficiary_id = ?');
+          whereArgs.add(excludeBeneficiaryId);
+        }
+        
+        if (excludeOfflineId != null) {
+          exclusionConditions.add('offline_id = ?');
+          whereArgs.add(excludeOfflineId);
+        }
+        
+        whereClause += exclusionConditions.join(' OR ');
+        whereClause += ')';
       }
       
-      if (excludeOfflineId != null) {
-        whereClause += ' AND offline_id != ?';
-        whereArgs.add(excludeOfflineId);
-      }
+      developer.log('Checking device serial no: "$deviceSerialNo" with query: $whereClause, args: $whereArgs', name: 'BeneficiaryRepository');
       
       final result = await db.query(
         'beneficiaries',
@@ -385,6 +411,8 @@ class BeneficiaryRepository {
         whereArgs: whereArgs,
         limit: 1,
       );
+      
+      developer.log('Device serial no check result: ${result.isNotEmpty ? "EXISTS" : "NOT EXISTS"} (found ${result.length} records)', name: 'BeneficiaryRepository');
       
       return result.isNotEmpty;
     } catch (e) {

@@ -84,7 +84,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       developer.log('Loaded ${beneficiaries.length} beneficiaries', name: 'BeneficiaryList');
       
       // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
-      // Within each group, sort by beneficiary_id descending
+      // Within NOT SYNCED group: sort by offline_id descending (newest first)
+      // Within SYNCED group: sort by beneficiary_id descending (newest first)
       beneficiaries.sort((a, b) {
         final aSync = a.sIsSync ?? 0;
         final bSync = b.sIsSync ?? 0;
@@ -94,21 +95,27 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           return aSync.compareTo(bSync);
         }
         
-        // If same sync status, sort by beneficiary_id descending (highest first)
-        // For unsynced items without beneficiary_id, use offline_id
-        final aBeneficiaryId = a.beneficiaryId ?? a.offlineId ?? 0;
-        final bBeneficiaryId = b.beneficiaryId ?? b.offlineId ?? 0;
-        return bBeneficiaryId.compareTo(aBeneficiaryId);
+        // If both are NOT SYNCED (s_is_sync = 0), sort by offline_id descending
+        if (aSync == 0 && bSync == 0) {
+          final aOfflineId = a.offlineId ?? 0;
+          final bOfflineId = b.offlineId ?? 0;
+          return bOfflineId.compareTo(aOfflineId); // Higher offline_id first (newest)
+        }
+        
+        // If both are SYNCED (s_is_sync = 1), sort by beneficiary_id descending
+        final aBeneficiaryId = a.beneficiaryId ?? 0;
+        final bBeneficiaryId = b.beneficiaryId ?? 0;
+        return bBeneficiaryId.compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
       });
       
       // Log first few beneficiaries for debugging
       if (beneficiaries.isNotEmpty) {
         developer.log('========================================', name: 'BeneficiaryList');
-        developer.log('Top beneficiaries after sorting (NOT SYNCED first, then by beneficiary_id DESC):', name: 'BeneficiaryList');
+        developer.log('Top beneficiaries after sorting (NOT SYNCED by offline_id DESC, then SYNCED by beneficiary_id DESC):', name: 'BeneficiaryList');
         for (var i = 0; i < (beneficiaries.length > 5 ? 5 : beneficiaries.length); i++) {
           final b = beneficiaries[i];
           developer.log(
-            '[$i] ${b.firstName} ${b.lastName} | Beneficiary_ID: ${b.beneficiaryId ?? 'offline:${b.offlineId}'} | Synced: ${b.sIsSync == 1 ? 'YES' : 'NO'}',
+            '[$i] ${b.firstName} ${b.lastName} | offline_id: ${b.offlineId} | beneficiary_id: ${b.beneficiaryId} | Synced: ${b.sIsSync == 1 ? 'YES' : 'NO'}',
             name: 'BeneficiaryList',
           );
         }

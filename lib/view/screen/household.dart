@@ -53,7 +53,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       developer.log('Loaded ${beneficiaries.length} households', name: 'HouseholdScreen');
       
       // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
-      // Within each group, sort by beneficiary_id descending
+      // Within NOT SYNCED group: sort by offline_id descending (newest first)
+      // Within SYNCED group: sort by beneficiary_id descending (newest first)
       beneficiaries.sort((a, b) {
         final aSync = a.sIsSync ?? 0;
         final bSync = b.sIsSync ?? 0;
@@ -63,10 +64,17 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           return aSync.compareTo(bSync);
         }
         
-        // If same sync status, sort by beneficiary_id descending (highest first)
+        // If both are NOT SYNCED (s_is_sync = 0), sort by offline_id descending
+        if (aSync == 0 && bSync == 0) {
+          final aOfflineId = a.offlineId ?? 0;
+          final bOfflineId = b.offlineId ?? 0;
+          return bOfflineId.compareTo(aOfflineId); // Higher offline_id first (newest)
+        }
+        
+        // If both are SYNCED (s_is_sync = 1), sort by beneficiary_id descending
         final aBeneficiaryId = a.beneficiaryId ?? 0;
         final bBeneficiaryId = b.beneficiaryId ?? 0;
-        return bBeneficiaryId.compareTo(aBeneficiaryId);
+        return bBeneficiaryId.compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
       });
       
       setState(() {
