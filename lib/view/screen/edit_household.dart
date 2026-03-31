@@ -75,6 +75,11 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       if (text.isNotEmpty) {
         setState(() => _isDeviceSerialNoChecking = true);
         
+        developer.log('========================================', name: 'EditHouseholdScreen');
+        developer.log('Device Serial No Listener Triggered', name: 'EditHouseholdScreen');
+        developer.log('Input: "$text"', name: 'EditHouseholdScreen');
+        developer.log('Current beneficiary - beneficiary_id: ${_beneficiary?.beneficiaryId}, offline_id: ${_beneficiary?.offlineId}', name: 'EditHouseholdScreen');
+        
         // IMPORTANT: Always check local database for duplicates, regardless of connectivity
         // Ensure we exclude the current beneficiary by both beneficiary_id AND offline_id
         final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
@@ -83,7 +88,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           excludeOfflineId: _beneficiary?.offlineId,
         );
         
-        developer.log('Device Serial No check: "$text" - exists: $exists (excluding beneficiary_id: ${_beneficiary?.beneficiaryId}, offline_id: ${_beneficiary?.offlineId})', name: 'EditHouseholdScreen');
+        developer.log('Validation result: ${exists ? "DUPLICATE" : "AVAILABLE"}', name: 'EditHouseholdScreen');
+        developer.log('========================================', name: 'EditHouseholdScreen');
         
         // Only update state if the widget is still mounted
         if (mounted) {
@@ -155,13 +161,19 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
             if (mounted) {
               setState(() => _isDeviceSerialNoChecking = true);
               
+              developer.log('========================================', name: 'EditHouseholdScreen');
+              developer.log('Initial Device Serial No Validation', name: 'EditHouseholdScreen');
+              developer.log('Input: "${_deviceSerialNoController.text.trim()}"', name: 'EditHouseholdScreen');
+              developer.log('Current beneficiary - beneficiary_id: ${_beneficiary?.beneficiaryId}, offline_id: ${_beneficiary?.offlineId}', name: 'EditHouseholdScreen');
+              
               final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
                 _deviceSerialNoController.text.trim(),
                 excludeBeneficiaryId: _beneficiary?.beneficiaryId,
                 excludeOfflineId: _beneficiary?.offlineId,
               );
               
-              developer.log('Initial Device Serial No validation: "${_deviceSerialNoController.text.trim()}" - exists: $exists', name: 'EditHouseholdScreen');
+              developer.log('Initial validation result: ${exists ? "DUPLICATE" : "AVAILABLE"}', name: 'EditHouseholdScreen');
+              developer.log('========================================', name: 'EditHouseholdScreen');
               
               if (mounted) {
                 setState(() {
