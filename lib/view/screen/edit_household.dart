@@ -70,22 +70,49 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
   void _setupDeviceSerialNoListener() {
     _deviceSerialNoController.addListener(() async {
       final text = _deviceSerialNoController.text;
+
+      developer.log('=== Device Serial No Listener Fired ===', name: 'EditHouseholdScreen');
+      developer.log('Text: "$text"', name: 'EditHouseholdScreen');
+      
+      // Convert to uppercase and filter to alphanumeric only
+      final filtered = text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      if (filtered != text) {
+        developer.log('Converting "$text" to "$filtered"', name: 'EditHouseholdScreen');
+        _deviceSerialNoController.value = TextEditingValue(
+          text: filtered,
+          selection: TextSelection.collapsed(offset: filtered.length),
+        );
+        return;
+      }
+      
+      developer.log('Text after filtering: "$text"', name: 'EditHouseholdScreen');
+      developer.log('Current _beneficiary: ${_beneficiary != null ? "LOADED" : "NULL"}', name: 'EditHouseholdScreen');
+      if (_beneficiary != null) {
+        developer.log('  - beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
+        developer.log('  - offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
+        developer.log('  - name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
+      }
       
       // Check for duplicates (exclude current beneficiary if editing)
       if (text.trim().isNotEmpty) {
         setState(() => _isDeviceSerialNoChecking = true);
         
+        developer.log('Calling isDeviceSerialNoExists...', name: 'EditHouseholdScreen');
         final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
           text.trim(),
           excludeBeneficiaryId: _beneficiary?.beneficiaryId,
           excludeOfflineId: _beneficiary?.offlineId,
         );
         
+        developer.log('Result: ${exists ? "EXISTS (DUPLICATE)" : "NOT EXISTS (AVAILABLE)"}', name: 'EditHouseholdScreen');
+        developer.log('=== End Device Serial No Check ===', name: 'EditHouseholdScreen');
+        
         setState(() {
           _isDeviceSerialNoChecking = false;
           _isDeviceSerialNoDuplicate = exists;
         });
       } else {
+        developer.log('Text is empty, skipping check', name: 'EditHouseholdScreen');
         setState(() {
           _isDeviceSerialNoChecking = false;
           _isDeviceSerialNoDuplicate = false;
@@ -130,7 +157,13 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
       
       if (_beneficiary != null) {
-        developer.log('Loaded beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName} (beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId})', name: 'EditHouseholdScreen');
+        developer.log('========================================', name: 'EditHouseholdScreen');
+        developer.log('Beneficiary loaded successfully', name: 'EditHouseholdScreen');
+        developer.log('Name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
+        developer.log('beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
+        developer.log('offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
+        developer.log('device_serial_no: ${_beneficiary!.deviceSerialNo}', name: 'EditHouseholdScreen');
+        developer.log('========================================', name: 'EditHouseholdScreen');
         
         // Populate form fields
         _cookStoveDetailsController.text = _beneficiary!.cookingMethod ?? '';
@@ -838,23 +871,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                           ),
                         ),
                       ),
-                      
-                      // Sync button (only show if not synced)
-                      // if (_beneficiary?.sIsSync == 0) ...[
-                      //   GestureDetector(
-                      //     onTap: _syncHousehold,
-                      //     child: Container(
-                      //       width: 34,
-                      //       height: 34,
-                      //       decoration: BoxDecoration(
-                      //         color: const Color(0xFFFF9800),
-                      //         shape: BoxShape.circle,
-                      //       ),
-                      //       child: const Icon(Icons.sync, color: Colors.white, size: 18),
-                      //     ),
-                      //   ),
-                      //   const SizedBox(width: 8),
-                      // ],
+                    
                       
                       Container(
                         width: 34,
@@ -1002,16 +1019,6 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: InputBorder.none,
                 ),
-                onChanged: (value) {
-                  // Convert to uppercase and filter to alphanumeric only
-                  final filtered = value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-                  if (filtered != value) {
-                    _deviceSerialNoController.value = TextEditingValue(
-                      text: filtered,
-                      selection: TextSelection.collapsed(offset: filtered.length),
-                    );
-                  }
-                },
                 validator: (value) {
                   if (value?.isEmpty ?? true) return 'Device Serial No is required';
                   

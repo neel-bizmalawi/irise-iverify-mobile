@@ -380,6 +380,24 @@ class BeneficiaryRepository {
   Future<bool> isDeviceSerialNoExists(String deviceSerialNo, {int? excludeBeneficiaryId, int? excludeOfflineId}) async {
     final db = await _dbHelper.database;
     try {
+      developer.log('========================================', name: 'BeneficiaryRepository');
+      developer.log('isDeviceSerialNoExists called', name: 'BeneficiaryRepository');
+      developer.log('Input deviceSerialNo: "$deviceSerialNo"', name: 'BeneficiaryRepository');
+      developer.log('excludeBeneficiaryId: $excludeBeneficiaryId', name: 'BeneficiaryRepository');
+      developer.log('excludeOfflineId: $excludeOfflineId', name: 'BeneficiaryRepository');
+      
+      // First, let's see ALL beneficiaries with device_serial_no
+      final allBeneficiaries = await db.query(
+        'beneficiaries',
+        columns: ['beneficiary_id', 'offline_id', 'device_serial_no', 'first_name', 'last_name'],
+        where: 'device_serial_no IS NOT NULL AND device_serial_no != ""',
+      );
+      
+      developer.log('Total beneficiaries with device_serial_no: ${allBeneficiaries.length}', name: 'BeneficiaryRepository');
+      for (var ben in allBeneficiaries) {
+        developer.log('  - ID: ${ben['beneficiary_id']}, Offline: ${ben['offline_id']}, Serial: "${ben['device_serial_no']}", Name: ${ben['first_name']} ${ben['last_name']}', name: 'BeneficiaryRepository');
+      }
+      
       String whereClause = 'device_serial_no = ?';
       List<dynamic> whereArgs = [deviceSerialNo];
       
@@ -403,7 +421,8 @@ class BeneficiaryRepository {
         whereClause += ')';
       }
       
-      developer.log('Checking device serial no: "$deviceSerialNo" with query: $whereClause, args: $whereArgs', name: 'BeneficiaryRepository');
+      developer.log('SQL WHERE: $whereClause', name: 'BeneficiaryRepository');
+      developer.log('SQL ARGS: $whereArgs', name: 'BeneficiaryRepository');
       
       final result = await db.query(
         'beneficiaries',
@@ -412,11 +431,24 @@ class BeneficiaryRepository {
         limit: 1,
       );
       
-      developer.log('Device serial no check result: ${result.isNotEmpty ? "EXISTS" : "NOT EXISTS"} (found ${result.length} records)', name: 'BeneficiaryRepository');
+      developer.log('Query returned ${result.length} records', name: 'BeneficiaryRepository');
+      if (result.isNotEmpty) {
+        developer.log('MATCH FOUND:', name: 'BeneficiaryRepository');
+        for (var record in result) {
+          developer.log('  - ID: ${record['beneficiary_id']}, Offline: ${record['offline_id']}, Serial: "${record['device_serial_no']}", Name: ${record['first_name']} ${record['last_name']}', name: 'BeneficiaryRepository');
+        }
+      } else {
+        developer.log('NO MATCH FOUND', name: 'BeneficiaryRepository');
+      }
       
-      return result.isNotEmpty;
-    } catch (e) {
-      developer.log('Error checking device serial number existence: $e', name: 'BeneficiaryRepository');
+      final exists = result.isNotEmpty;
+      developer.log('FINAL RESULT: ${exists ? "EXISTS" : "NOT EXISTS"}', name: 'BeneficiaryRepository');
+      developer.log('========================================', name: 'BeneficiaryRepository');
+      
+      return exists;
+    } catch (e, stackTrace) {
+      developer.log('ERROR in isDeviceSerialNoExists: $e', name: 'BeneficiaryRepository');
+      developer.log('Stack trace: $stackTrace', name: 'BeneficiaryRepository');
       return false;
     }
   }
