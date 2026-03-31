@@ -75,6 +75,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       if (text.isNotEmpty) {
         setState(() => _isDeviceSerialNoChecking = true);
         
+        // IMPORTANT: Always check local database for duplicates, regardless of connectivity
         // Ensure we exclude the current beneficiary by both beneficiary_id AND offline_id
         final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
           text,
@@ -84,15 +85,20 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         
         developer.log('Device Serial No check: "$text" - exists: $exists (excluding beneficiary_id: ${_beneficiary?.beneficiaryId}, offline_id: ${_beneficiary?.offlineId})', name: 'EditHouseholdScreen');
         
-        setState(() {
-          _isDeviceSerialNoChecking = false;
-          _isDeviceSerialNoDuplicate = exists;
-        });
+        // Only update state if the widget is still mounted
+        if (mounted) {
+          setState(() {
+            _isDeviceSerialNoChecking = false;
+            _isDeviceSerialNoDuplicate = exists;
+          });
+        }
       } else {
-        setState(() {
-          _isDeviceSerialNoChecking = false;
-          _isDeviceSerialNoDuplicate = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isDeviceSerialNoChecking = false;
+            _isDeviceSerialNoDuplicate = false;
+          });
+        }
       }
     });
   }
@@ -140,6 +146,32 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         _deviceSerialNoController.text = _beneficiary!.deviceSerialNo ?? '';
         _latitude = _beneficiary!.latitude;
         _longitude = _beneficiary!.longitude;
+        
+        // Trigger device serial number validation after loading beneficiary
+        // This ensures the validation runs with the correct exclusion IDs
+        if (_deviceSerialNoController.text.trim().isNotEmpty) {
+          // Use Future.microtask to avoid calling setState during build
+          Future.microtask(() async {
+            if (mounted) {
+              setState(() => _isDeviceSerialNoChecking = true);
+              
+              final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
+                _deviceSerialNoController.text.trim(),
+                excludeBeneficiaryId: _beneficiary?.beneficiaryId,
+                excludeOfflineId: _beneficiary?.offlineId,
+              );
+              
+              developer.log('Initial Device Serial No validation: "${_deviceSerialNoController.text.trim()}" - exists: $exists', name: 'EditHouseholdScreen');
+              
+              if (mounted) {
+                setState(() {
+                  _isDeviceSerialNoChecking = false;
+                  _isDeviceSerialNoDuplicate = exists;
+                });
+              }
+            }
+          });
+        }
         
         // Load image paths and files
         _houseImagePath = _beneficiary!.housePic;
@@ -1023,8 +1055,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                     return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
                   }
                   
-                  // if (_isDeviceSerialNoDuplicate) return 'This Device Serial No already exists';
-                  // return null;
+                  return null;
                 },
               ),
             ),
