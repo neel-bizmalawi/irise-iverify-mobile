@@ -380,26 +380,7 @@ class BeneficiaryRepository {
   Future<bool> isDeviceSerialNoExists(String deviceSerialNo, {int? excludeBeneficiaryId, int? excludeOfflineId}) async {
     final db = await _dbHelper.database;
     try {
-      // First, check if device_serial_no is null or empty - skip check if so
-      if (deviceSerialNo.trim().isEmpty) {
-        developer.log('Device serial no is empty, skipping check', name: 'BeneficiaryRepository');
-        return false;
-      }
-      
-      // Debug: Log all beneficiaries with device_serial_no
-      final allWithDeviceSerial = await db.query(
-        'beneficiaries',
-        columns: ['beneficiary_id', 'offline_id', 'device_serial_no', 'first_name', 'last_name'],
-        where: 'device_serial_no IS NOT NULL AND device_serial_no != ""',
-      );
-      
-      developer.log('========================================', name: 'BeneficiaryRepository');
-      developer.log('All beneficiaries with device_serial_no in database:', name: 'BeneficiaryRepository');
-      for (var record in allWithDeviceSerial) {
-        developer.log('  - beneficiary_id=${record['beneficiary_id']}, offline_id=${record['offline_id']}, device_serial_no="${record['device_serial_no']}", name=${record['first_name']} ${record['last_name']}', name: 'BeneficiaryRepository');
-      }
-      
-      String whereClause = 'device_serial_no = ? AND device_serial_no IS NOT NULL AND device_serial_no != ""';
+      String whereClause = 'device_serial_no = ?';
       List<dynamic> whereArgs = [deviceSerialNo];
       
       // Build exclusion clause: exclude if EITHER beneficiary_id OR offline_id matches
@@ -422,28 +403,16 @@ class BeneficiaryRepository {
         whereClause += ')';
       }
       
-      developer.log('Checking device serial no: "$deviceSerialNo"', name: 'BeneficiaryRepository');
-      developer.log('Query: $whereClause', name: 'BeneficiaryRepository');
-      developer.log('Args: $whereArgs', name: 'BeneficiaryRepository');
-      developer.log('Excluding beneficiary_id: $excludeBeneficiaryId, offline_id: $excludeOfflineId', name: 'BeneficiaryRepository');
+      developer.log('Checking device serial no: "$deviceSerialNo" with query: $whereClause, args: $whereArgs', name: 'BeneficiaryRepository');
       
       final result = await db.query(
         'beneficiaries',
         where: whereClause,
         whereArgs: whereArgs,
+        limit: 1,
       );
       
-      developer.log('Found ${result.length} matching records', name: 'BeneficiaryRepository');
-      
-      // Log details of found records for debugging
-      if (result.isNotEmpty) {
-        for (var record in result) {
-          developer.log('  - Match: beneficiary_id=${record['beneficiary_id']}, offline_id=${record['offline_id']}, device_serial_no=${record['device_serial_no']}, name=${record['first_name']} ${record['last_name']}', name: 'BeneficiaryRepository');
-        }
-      }
-      
-      developer.log('Result: ${result.isNotEmpty ? "EXISTS" : "NOT EXISTS"}', name: 'BeneficiaryRepository');
-      developer.log('========================================', name: 'BeneficiaryRepository');
+      developer.log('Device serial no check result: ${result.isNotEmpty ? "EXISTS" : "NOT EXISTS"} (found ${result.length} records)', name: 'BeneficiaryRepository');
       
       return result.isNotEmpty;
     } catch (e) {
