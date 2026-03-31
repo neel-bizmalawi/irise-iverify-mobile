@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 9;
+  static const int _databaseVersion = 10;
 
   DatabaseHelper._internal();
 
@@ -90,7 +90,7 @@ class DatabaseHelper {
         males_above_18 INTEGER,
         cooking_method TEXT,
         district_name TEXT,
-        national_id TEXT,
+        national_id TEXT UNIQUE,
         national_id_attachment TEXT,
         house_pic TEXT,
         cookstove_pic TEXT,
@@ -690,6 +690,125 @@ class DatabaseHelper {
       }
       
       developer.log('Database migration to version 9 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 10) {
+      // Migration from version 9 to 10: Add UNIQUE constraint to national_id
+      developer.log('Migrating to version 10: Adding UNIQUE constraint to national_id', name: 'DatabaseHelper');
+      
+      try {
+        // Check for duplicate national_ids before migration
+        final duplicates = await db.rawQuery('''
+          SELECT national_id, COUNT(*) as count 
+          FROM beneficiaries 
+          WHERE national_id IS NOT NULL AND national_id != ''
+          GROUP BY national_id 
+          HAVING COUNT(*) > 1
+        ''');
+        
+        if (duplicates.isNotEmpty) {
+          developer.log('⚠️ WARNING: Found ${duplicates.length} duplicate national_id values!', name: 'DatabaseHelper');
+          for (var dup in duplicates) {
+            developer.log('  - National ID: ${dup['national_id']} appears ${dup['count']} times', name: 'DatabaseHelper');
+          }
+          
+          // Keep only the first occurrence of each duplicate, delete the rest
+          for (var dup in duplicates) {
+            final nationalId = dup['national_id'] as String;
+            
+            // Get all records with this national_id
+            final records = await db.query(
+              'beneficiaries',
+              where: 'national_id = ?',
+              whereArgs: [nationalId],
+              orderBy: 'id ASC',
+            );
+            
+            if (records.length > 1) {
+              // Keep the first record, delete the rest
+              for (int i = 1; i < records.length; i++) {
+                final recordId = records[i]['id'];
+                await db.delete(
+                  'beneficiaries',
+                  where: 'id = ?',
+                  whereArgs: [recordId],
+                );
+                developer.log('  - Deleted duplicate record with id: $recordId', name: 'DatabaseHelper');
+              }
+            }
+          }
+          
+          developer.log('Cleaned up duplicate national_id records', name: 'DatabaseHelper');
+        }
+        
+        // Create new beneficiaries table with UNIQUE constraint on national_id
+        await db.execute('''
+          CREATE TABLE beneficiaries_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            beneficiary_id INTEGER UNIQUE,
+            training_site TEXT,
+            m_user_id INTEGER,
+            m_site_id INTEGER,
+            first_name TEXT,
+            last_name TEXT,
+            mobile_no TEXT,
+            other_cookstove TEXT DEFAULT 'no',
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            cooking_method TEXT,
+            district_name TEXT,
+            national_id TEXT UNIQUE,
+            national_id_attachment TEXT,
+            house_pic TEXT,
+            cookstove_pic TEXT,
+            signature TEXT,
+            emp_id INTEGER,
+            language TEXT DEFAULT 'english',
+            read_doc TEXT DEFAULT 'no',
+            understood_doc TEXT DEFAULT 'no',
+            emp_sign TEXT,
+            read_to_you TEXT DEFAULT 'no',
+            stove_status_delivery TEXT DEFAULT 'no',
+            no_other_cook_stove_present TEXT DEFAULT 'no',
+            primary_residence_confirmation TEXT DEFAULT 'no',
+            cookstove_pic_timestamp TEXT,
+            house_pic_timestamp TEXT,
+            national_id_timestamp TEXT,
+            signature_timestamp TEXT,
+            device_serial_no TEXT,
+            latitude REAL,
+            longitude REAL,
+            geo_address TEXT,
+            created_date TEXT,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            status TEXT DEFAULT 'active',
+            s_is_sync INTEGER DEFAULT 0,
+            offline_id INTEGER UNIQUE,
+            server_time TEXT
+          )
+        ''');
+        
+        // Copy all data from old table to new table
+        await db.execute('''
+          INSERT INTO beneficiaries_new 
+          SELECT * FROM beneficiaries
+        ''');
+        
+        // Drop old table and rename new one
+        await db.execute('DROP TABLE beneficiaries');
+        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+        
+        developer.log('Successfully added UNIQUE constraint to national_id', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 10 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 10 completed', name: 'DatabaseHelper');
     }
   }
 

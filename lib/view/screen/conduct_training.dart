@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:irise/route/app_routes.dart';
 import 'package:irise/view/screen/conduct_training_sheet.dart';
 import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/models/training_site.dart';
 import 'package:irise/data/services/data_service.dart';
+import 'package:irise/core/services/connectivity_service.dart';
 import 'package:irise/view/screen/_sync_badge.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'dart:developer' as developer;
@@ -456,6 +458,21 @@ class _TrainingCardState extends State<_TrainingCard> {
   }
 
   Future<void> _syncSingleSite() async {
+    // Check internet connectivity first
+    final connectivityService = context.read<ConnectivityService>();
+    if (!connectivityService.isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Internet is off. Please connect to the internet to sync.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
     if (_currentSite.sIsSync == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

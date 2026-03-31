@@ -36,23 +36,31 @@ class _NetworkImageWithRetryState extends State<NetworkImageWithRetry> {
     super.initState();
     // Listen to connectivity changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final connectivityService = context.read<ConnectivityService>();
-      connectivityService.addListener(_onConnectivityChanged);
+      if (mounted) {
+        final connectivityService = context.read<ConnectivityService>();
+        connectivityService.addListener(_onConnectivityChanged);
+      }
     });
   }
 
   @override
   void dispose() {
-    try {
-      final connectivityService = context.read<ConnectivityService>();
-      connectivityService.removeListener(_onConnectivityChanged);
-    } catch (e) {
-      // Context might be disposed
+    // Remove listener before disposing
+    if (mounted) {
+      try {
+        final connectivityService = context.read<ConnectivityService>();
+        connectivityService.removeListener(_onConnectivityChanged);
+      } catch (e) {
+        developer.log('Error removing connectivity listener: $e', name: 'NetworkImageWithRetry');
+      }
     }
     super.dispose();
   }
 
   void _onConnectivityChanged() {
+    // Check if widget is still mounted before accessing context
+    if (!mounted) return;
+    
     final connectivityService = context.read<ConnectivityService>();
     
     // If we had an error and now we're connected, retry loading

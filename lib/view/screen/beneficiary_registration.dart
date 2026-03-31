@@ -1047,9 +1047,9 @@ class _BeneficiaryRegistrationScreenState
                 if (!RegExp(r'^[A-Z0-9]+$').hasMatch(cleanValue)) {
                   return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
                 }
-                if (_isNationalIdDuplicate) {
-                  return 'This National ID already exists';
-                }
+                // if (_isNationalIdDuplicate) {
+                //   return 'This National ID already exists';
+                // }
                 return null;
               },
             ),
@@ -1442,6 +1442,7 @@ class _BeneficiaryRegistrationScreenState
   Widget _buildNationalIdImageSection() {
     return _buildImageCaptureSection(
       title: 'NATIONAL ID IMAGE',
+      isRequired: true,
       buttonText: 'Take National ID Image',
       image: _nationalIdImage,
       onTakePhoto: () => _takePhoto('National ID'),
@@ -1451,6 +1452,7 @@ class _BeneficiaryRegistrationScreenState
 
   Widget _buildImageCaptureSection({
     required String title,
+    bool isRequired = false,
     required String buttonText,
     required File? image,
     required VoidCallback onTakePhoto,
@@ -1465,13 +1467,26 @@ class _BeneficiaryRegistrationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-            letterSpacing: 0.5,
+        RichText(
+          text: TextSpan(
+            text: title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              letterSpacing: 0.5,
+            ),
+            children: [
+              if (isRequired)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -1826,13 +1841,25 @@ class _BeneficiaryRegistrationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'SIGNATURE',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-            letterSpacing: 0.5,
+        RichText(
+          text: const TextSpan(
+            text: 'SIGNATURE',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              letterSpacing: 0.5,
+            ),
+            children: [
+              TextSpan(
+                text: ' *',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),

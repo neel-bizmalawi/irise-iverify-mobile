@@ -235,12 +235,12 @@ class Beneficiary {
       'latitude': latitude,
       'longitude': longitude,
       'geo_address': geoAddress,
-      // Only send created_date and created_by for new records (first sync)
+      // For new records (no beneficiary_id): send created_date and created_by, don't send modified fields
       if (isNewRecord) 'created_date': createdDate,
       if (isNewRecord) 'created_by': createdBy,
-      // Always send modified_date and modified_by
-      'modified_date': modifiedDate,
-      'modified_by': modifiedBy,
+      // For existing records (has beneficiary_id): send modified_date and modified_by, don't send created fields
+      if (!isNewRecord) 'modified_date': modifiedDate,
+      if (!isNewRecord) 'modified_by': modifiedBy,
       'status': status,
       's_is_sync': sIsSync,
       // Exclude offline_id from sync - it's only for local tracking

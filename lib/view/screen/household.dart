@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:irise/route/app_routes.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/data/services/data_service.dart';
+import 'package:irise/core/services/connectivity_service.dart';
 import 'dart:developer' as developer;
 
 class HouseholdScreen extends StatefulWidget {
@@ -134,6 +136,21 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   }
 
   Future<void> _syncHousehold(Beneficiary household) async {
+    // Check internet connectivity first
+    final connectivityService = context.read<ConnectivityService>();
+    if (!connectivityService.isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Internet is off. Please connect to the internet to sync.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
     try {
       developer.log('Syncing household: ${household.firstName} ${household.lastName}', name: 'HouseholdScreen');
       
@@ -629,22 +646,23 @@ class _HouseholdTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  // Edit Icon (always enabled)
-                  GestureDetector(
-                    onTap: onTap,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        color: Color(0xFF4CAF50),
-                        size: 15,
+                  // Edit Icon (only show if there are missing fields)
+                  if (missing.isNotEmpty)
+                    GestureDetector(
+                      onTap: onTap,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          color: Color(0xFF4CAF50),
+                          size: 15,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ],

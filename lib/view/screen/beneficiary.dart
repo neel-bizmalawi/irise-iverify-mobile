@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:irise/route/app_routes.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/data/services/data_service.dart';
+import 'package:irise/core/services/connectivity_service.dart';
 import 'dart:developer' as developer;
 
 class BeneficiaryListScreen extends StatefulWidget {
@@ -139,6 +141,21 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
   int get _unsyncedCount => _beneficiaries.where((b) => b.sIsSync == 0).length;
 
   Future<void> _syncBeneficiary(Beneficiary beneficiary) async {
+    // Check internet connectivity first
+    final connectivityService = context.read<ConnectivityService>();
+    if (!connectivityService.isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Internet is off. Please connect to the internet to sync.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
     try {
       developer.log('Syncing beneficiary: ${beneficiary.firstName} ${beneficiary.lastName}', name: 'BeneficiaryList');
       
@@ -604,6 +621,8 @@ class _BeneficiaryCard extends StatelessWidget {
     if (beneficiary.malesAbove18 == null) missing.add('Males +18');
     if (beneficiary.cookingMethod == null || beneficiary.cookingMethod!.isEmpty) missing.add('Cooking Method');
     if (beneficiary.language == null || beneficiary.language!.isEmpty) missing.add('Preferred Language');
+    if (beneficiary.nationalIdAttachment == null || beneficiary.nationalIdAttachment!.isEmpty) missing.add('National ID Image');
+    if (beneficiary.signature == null || beneficiary.signature!.isEmpty) missing.add('Signature');
 
     return Container(
         decoration: BoxDecoration(
@@ -701,20 +720,21 @@ class _BeneficiaryCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            // Edit Icon - always show
-                            GestureDetector(
-                              onTap: () async {
-                                // Navigate to edit screen
-                                await context.push(
-                                  '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
-                                );
-                              },
-                              child: const Icon(
-                                Icons.edit_note,
-                                color: Colors.black54,
-                                size: 24,
+                            // Edit Icon - only show if there are missing fields
+                            if (missing.isNotEmpty)
+                              GestureDetector(
+                                onTap: () async {
+                                  // Navigate to edit screen
+                                  await context.push(
+                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
+                                  );
+                                },
+                                child: const Icon(
+                                  Icons.edit_note,
+                                  color: Colors.black54,
+                                  size: 24,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ],
