@@ -533,7 +533,10 @@ class _TrainingCardState extends State<_TrainingCard> {
           siteData['training_point_id'] = _currentSite.trainingPointId;
           developer.log('Syncing UPDATE for training site with training_point_id: ${_currentSite.trainingPointId}', name: 'ConductTraining');
         } else {
-          // This is a new creation - don't include training_point_id
+          // This is a new creation - include created_date
+          if (_currentSite.createdDate != null) {
+            siteData['created_date'] = _currentSite.createdDate;
+          }
           developer.log('Syncing NEW training site with offline_id: ${_currentSite.offlineId}', name: 'ConductTraining');
         }
         
@@ -861,7 +864,7 @@ class _TrainingCardState extends State<_TrainingCard> {
                 ),
                 Spacer(),
                 Text(
-              'Training Done: ${(_currentSite.trainingStatus?.toLowerCase() == 'completed') ? 'YES' : 'NO'}',
+              'Training Done: ${(_currentSite.numberOfPeoplePresent != null) ? 'YES' : 'NO'}',
               style: const TextStyle(
                 fontSize: 12,
                 color: Colors.black54,

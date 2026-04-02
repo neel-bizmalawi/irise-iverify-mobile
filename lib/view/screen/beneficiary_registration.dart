@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:irise/data/repositories/language_repository.dart';
-import 'package:irise/data/repositories/training_site_list_repository.dart';
+import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/repositories/cookstove_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
@@ -35,7 +35,7 @@ class _BeneficiaryRegistrationScreenState
 
   // Repositories
   final _languageRepo = LanguageRepository();
-  final _trainingSiteListRepo = TrainingSiteListRepository();
+  final _trainingSiteRepo = TrainingSiteRepository();
   final _beneficiaryRepo = BeneficiaryRepository();
   final _cookstoveRepo = CookstoveRepository();
   final _tokenStorage = TokenStorage();
@@ -214,7 +214,10 @@ class _BeneficiaryRegistrationScreenState
           name: 'BeneficiaryRegistration');
 
       final languages = await _languageRepo.getAll();
-      final trainingSites = await _trainingSiteListRepo.getAll();
+      // Load ALL training sites from training_sites table (created on TrainingPointIdentificationScreen)
+      // Show both synced and unsynced training sites - user can select any
+      // Sync validation will happen later when user tries to sync the beneficiary
+      final trainingSites = await _trainingSiteRepo.getAll();
       final cookstoves = await _cookstoveRepo.getAll();
 
       setState(() {
@@ -223,7 +226,11 @@ class _BeneficiaryRegistrationScreenState
           _selectedLanguage = _languages.first;
         }
 
-        _trainingSites = trainingSites.map((t) => t.trainingSite).toList();
+        // Use training site names from ALL training_sites (both synced and unsynced)
+        _trainingSites = trainingSites
+            .map((t) => t.trainingSite ?? '')
+            .where((name) => name.isNotEmpty)
+            .toList();
         
         _cookingMethods = cookstoves.map((c) => c.cookstoveName).toList();
 
@@ -231,7 +238,7 @@ class _BeneficiaryRegistrationScreenState
       });
 
       developer.log(
-          'Loaded ${_languages.length} languages, ${_trainingSites.length} training sites, ${_cookingMethods.length} cooking methods',
+          'Loaded ${_languages.length} languages, ${_trainingSites.length} training sites (synced + unsynced), ${_cookingMethods.length} cooking methods',
           name: 'BeneficiaryRegistration');
     } catch (e) {
       developer.log('Error loading dropdown data: $e',
@@ -1390,6 +1397,25 @@ class _BeneficiaryRegistrationScreenState
       image: _nationalIdImage,
       onTakePhoto: () => _takePhoto('National ID'),
       timestamp: _nationalIdTimestamp,
+      onRemove: () {
+        setState(() {
+          _nationalIdImage = null;
+          _nationalIdTimestamp = null;
+          // If editing, also clear the existing beneficiary's attachment
+          if (_existingBeneficiary != null) {
+            _existingBeneficiary = _existingBeneficiary!.copyWith(
+              nationalIdAttachment: null,
+              nationalIdTimestamp: null,
+            );
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('National ID attachment removed'),
+            backgroundColor: Color(0xFF4CAF50),
+          ),
+        );
+      },
     );
   }
 
@@ -1400,6 +1426,7 @@ class _BeneficiaryRegistrationScreenState
     required File? image,
     required VoidCallback onTakePhoto,
     String? timestamp,
+    VoidCallback? onRemove,
   }) {
     // Determine if we should display an image from server
     final String? imagePath = _getImagePathForTitle(title);
@@ -1497,20 +1524,39 @@ class _BeneficiaryRegistrationScreenState
           ),
         ),
         const SizedBox(height: 8),
-        Center(
-          child: ElevatedButton.icon(
-            onPressed: onTakePhoto,
-            icon: const Icon(Icons.camera_alt, size: 18),
-            label: Text(hasAnyImage ? 'Retake Photo' : 'Take Photo'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: onTakePhoto,
+              icon: const Icon(Icons.camera_alt, size: 18),
+              label: Text(hasAnyImage ? 'Retake Photo' : 'Take Photo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-          ),
+            if (hasAnyImage && onRemove != null) ...[
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete, size: 18),
+                label: const Text('Remove'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 8),
         Row(

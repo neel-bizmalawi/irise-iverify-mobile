@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:irise/route/app_routes.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
+import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/data/services/data_service.dart';
 import 'package:irise/core/services/connectivity_service.dart';
@@ -157,6 +158,48 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         );
       }
       return;
+    }
+    
+    // CRITICAL: Check if training site is synced before allowing beneficiary sync
+    if (household.trainingSite != null && household.trainingSite!.isNotEmpty) {
+      try {
+        final trainingSiteRepo = TrainingSiteRepository();
+        final allTrainingSites = await trainingSiteRepo.getAll();
+        
+        // Find the training site by name
+        final trainingSite = allTrainingSites.firstWhere(
+          (site) => site.trainingSite == household.trainingSite,
+          orElse: () => throw Exception('Training site not found'),
+        );
+        
+        // Check if training site is synced
+        if (trainingSite.sIsSync == 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Cannot sync household. Please sync the training site "${household.trainingSite}" first from the Conduct Training screen.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        developer.log('Error checking training site sync status: $e', name: 'HouseholdScreen');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: Training site "${household.trainingSite}" not found. Please sync training sites first.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
     }
     
     try {
