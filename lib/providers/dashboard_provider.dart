@@ -805,6 +805,36 @@ class DashboardProvider extends ChangeNotifier {
       developer.log('STARTING BENEFICIARY SYNC', name: 'DashboardProvider');
       developer.log('========================================', name: 'DashboardProvider');
       
+      // CRITICAL: Check if ALL training sites are synced before allowing beneficiary sync
+      try {
+        final trainingSiteRepo = TrainingSiteRepository();
+        final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+        
+        if (!allSynced) {
+          developer.log('Cannot sync beneficiaries: Not all training sites are synced', name: 'DashboardProvider');
+          
+          _isSyncing = false;
+          notifyListeners();
+          
+          return SyncResult(
+            success: false,
+            message: 'Cannot sync beneficiaries. Please sync all training sites first from the Conduct Training screen.',
+          );
+        }
+        
+        developer.log('✅ All training sites are synced, proceeding with beneficiary sync', name: 'DashboardProvider');
+      } catch (e) {
+        developer.log('Error checking training sites sync status: $e', name: 'DashboardProvider');
+        
+        _isSyncing = false;
+        notifyListeners();
+        
+        return SyncResult(
+          success: false,
+          message: 'Error checking training sites: $e',
+        );
+      }
+      
       onProgress?.call('Starting beneficiary sync...', 0, 0);
       
       // Check if this is initial sync or incremental sync

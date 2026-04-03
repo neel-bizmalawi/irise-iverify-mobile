@@ -347,13 +347,13 @@ class _TrainingPointIdentificationScreenState
 
     if (_latitudeController.text.trim().isEmpty || 
         double.tryParse(_latitudeController.text.trim()) == null) {
-      _showErrorSnackBar('Valid latitude is required');
+      _showErrorSnackBar('Please capture GPS location');
       return false;
     }
 
     if (_longitudeController.text.trim().isEmpty || 
         double.tryParse(_longitudeController.text.trim()) == null) {
-      _showErrorSnackBar('Valid longitude is required');
+      _showErrorSnackBar('Please capture GPS location');
       return false;
     }
 

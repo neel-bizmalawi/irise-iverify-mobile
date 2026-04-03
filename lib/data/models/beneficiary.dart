@@ -44,6 +44,7 @@ class Beneficiary {
   final int? sIsSync;
   final int? offlineId;
   final String? serverTime;
+  final String? distributionDate;
 
   Beneficiary({
     this.id,
@@ -91,6 +92,7 @@ class Beneficiary {
     this.sIsSync,
     this.offlineId,
     this.serverTime,
+    this.distributionDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -140,6 +142,7 @@ class Beneficiary {
       's_is_sync': sIsSync,
       'offline_id': offlineId,
       'server_time': serverTime,
+      'distribution_date': distributionDate,
     };
   }
 
@@ -190,6 +193,7 @@ class Beneficiary {
       sIsSync: map['s_is_sync'] as int?,
       offlineId: map['offline_id'] as int?,
       serverTime: map['server_time'] as String?,
+      distributionDate: map['distribution_date'] as String?,
     );
   }
 
@@ -243,6 +247,7 @@ class Beneficiary {
       if (!isNewRecord) 'modified_by': modifiedBy,
       'status': status,
       's_is_sync': sIsSync,
+      'distribution_date': distributionDate,
       // Exclude offline_id from sync - it's only for local tracking
     };
   }
@@ -265,6 +270,7 @@ class Beneficiary {
       'modified_date': modifiedDate,
       'modified_by': modifiedBy,
       'status': status,
+      'distribution_date': distributionDate,
       // Exclude offline_id from sync - it's only for local tracking
     };
   }
@@ -332,6 +338,7 @@ class Beneficiary {
       status: json['status'] as String?,
       sIsSync: _parseInt(json['s_is_sync']),
       serverTime: json['server_time'] as String?,
+      distributionDate: json['distribution_date'] as String?,
     );
   }
 
@@ -381,6 +388,7 @@ class Beneficiary {
     int? sIsSync,
     int? offlineId,
     String? serverTime,
+    String? distributionDate,
   }) {
     return Beneficiary(
       id: id ?? this.id,
@@ -428,6 +436,7 @@ class Beneficiary {
       sIsSync: sIsSync ?? this.sIsSync,
       offlineId: offlineId ?? this.offlineId,
       serverTime: serverTime ?? this.serverTime,
+      distributionDate: distributionDate ?? this.distributionDate,
     );
   }
 }

@@ -162,7 +162,7 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)), // Allow future dates for offline scenarios
+      lastDate: DateTime.now(), // Only allow past or current date
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -246,6 +246,7 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
           conductTrainingDate: formattedDate,
           numberOfPeoplePresent: numberOfPeople,
           trainingStatus: 'completed',
+          modifiedDate: DateTime.now().toUtc().toIso8601String(),
           sIsSync: 0, // Mark as unsynced since we updated locally
         );
         

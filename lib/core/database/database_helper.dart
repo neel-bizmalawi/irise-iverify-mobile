@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 10;
+  static const int _databaseVersion = 11;
 
   DatabaseHelper._internal();
 
@@ -119,7 +119,8 @@ class DatabaseHelper {
         status TEXT DEFAULT 'active',
         s_is_sync INTEGER DEFAULT 0,
         offline_id INTEGER UNIQUE,
-        server_time TEXT
+        server_time TEXT,
+        distribution_date TEXT
       )
     ''');
 
@@ -809,6 +810,23 @@ class DatabaseHelper {
       }
       
       developer.log('Database migration to version 10 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 11) {
+      // Migration from version 10 to 11: Add distribution_date column
+      developer.log('Migrating to version 11: Adding distribution_date column', name: 'DatabaseHelper');
+      
+      try {
+        // Add distribution_date column to beneficiaries table
+        await db.execute('ALTER TABLE beneficiaries ADD COLUMN distribution_date TEXT');
+        
+        developer.log('Successfully added distribution_date column to beneficiaries table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 11 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 11 completed', name: 'DatabaseHelper');
     }
   }
 

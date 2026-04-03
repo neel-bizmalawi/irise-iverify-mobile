@@ -27,12 +27,15 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
   bool _isLoading = true;
   bool _hasLoadedOnce = false;
   bool _hasInitialFetch = false;
+  bool _allTrainingSitesSynced = true;
+  int _unsyncedTrainingSitesCount = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkInitialFetch();
+    _checkTrainingSitesStatus();
   }
 
   @override
@@ -64,6 +67,23 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
     }
   }
 
+  Future<void> _checkTrainingSitesStatus() async {
+    try {
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      final unsyncedCount = await trainingSiteRepo.getUnsyncedCount();
+      
+      setState(() {
+        _allTrainingSitesSynced = allSynced;
+        _unsyncedTrainingSitesCount = unsyncedCount;
+      });
+      
+      developer.log('Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount', name: 'BeneficiaryList');
+    } catch (e) {
+      developer.log('Error checking training sites status: $e', name: 'BeneficiaryList');
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -73,7 +93,10 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
     if (route != null && route.isCurrent && _hasLoadedOnce) {
       developer.log('Screen became active, reloading beneficiaries...', name: 'BeneficiaryList');
       // Use Future.microtask to avoid calling setState during build
-      Future.microtask(() => _loadBeneficiaries());
+      Future.microtask(() {
+        _loadBeneficiaries();
+        _checkTrainingSitesStatus();
+      });
     }
   }
 
@@ -164,7 +187,40 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       return;
     }
     
-    // CRITICAL: Check if training site is synced before allowing beneficiary sync
+    // CRITICAL: Check if ALL training sites are synced before allowing beneficiary sync
+    try {
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      
+      if (!allSynced) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot sync beneficiaries. Please sync all training sites first from the Conduct Training screen.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      developer.log('Error checking training sites sync status: $e', name: 'BeneficiaryList');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking training sites: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Additional check: Verify the specific training site for this beneficiary is synced
     if (beneficiary.trainingSite != null && beneficiary.trainingSite!.isNotEmpty) {
       try {
         final trainingSiteRepo = TrainingSiteRepository();
@@ -176,13 +232,13 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           orElse: () => throw Exception('Training site not found'),
         );
         
-        // Check if training site is synced
+        // Double-check if this specific training site is synced
         if (trainingSite.sIsSync == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Cannot sync beneficiary. Please sync the training site "${beneficiary.trainingSite}" first from the Conduct Training screen.',
+                  'Cannot sync beneficiary. The training site "${beneficiary.trainingSite}" is not synced yet.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 5),
@@ -192,11 +248,11 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           return;
         }
       } catch (e) {
-        developer.log('Error checking training site sync status: $e', name: 'BeneficiaryList');
+        developer.log('Error checking specific training site sync status: $e', name: 'BeneficiaryList');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Training site "${beneficiary.trainingSite}" not found. Please sync training sites first.'),
+              content: Text('Error: Training site "${beneficiary.trainingSite}" not found.'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -497,6 +553,58 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                   ),
                 ),
                 const SizedBox(height: 12),
+                
+                // ── Warning banner if training sites are not all synced ──
+                if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFF9800),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Color(0xFFFF9800),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Training Sites Not Synced',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$_unsyncedTrainingSitesCount training site${_unsyncedTrainingSitesCount > 1 ? 's' : ''} must be synced before beneficiaries can be synced.',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
+                  const SizedBox(height: 12),
                 
                 // ── Records loaded indicator ──
                 if (_filtered.isNotEmpty)

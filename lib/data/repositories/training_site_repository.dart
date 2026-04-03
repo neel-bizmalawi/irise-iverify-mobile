@@ -547,6 +547,35 @@ class TrainingSiteRepository {
     }
   }
 
+  // Check if all training sites are synced
+  Future<bool> areAllTrainingSitesSynced() async {
+    try {
+      final db = await _dbHelper.database;
+      
+      // Get total count
+      final totalResult = await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
+      final totalCount = Sqflite.firstIntValue(totalResult) ?? 0;
+      
+      // If no training sites exist, return false (need to sync from server first)
+      if (totalCount == 0) {
+        developer.log('No training sites found in database', name: 'TrainingSiteRepo');
+        return false;
+      }
+      
+      // Get unsynced count
+      final unsyncedResult = await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName WHERE s_is_sync = 0');
+      final unsyncedCount = Sqflite.firstIntValue(unsyncedResult) ?? 0;
+      
+      final allSynced = unsyncedCount == 0;
+      developer.log('Training sites sync status: $unsyncedCount unsynced out of $totalCount total', name: 'TrainingSiteRepo');
+      
+      return allSynced;
+    } catch (e) {
+      developer.log('Error checking if all training sites are synced: $e', name: 'TrainingSiteRepo');
+      rethrow;
+    }
+  }
+
   // Clear all
   Future<void> clearAll() async {
     try {

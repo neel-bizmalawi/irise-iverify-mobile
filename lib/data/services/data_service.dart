@@ -1651,6 +1651,20 @@ class DataService {
     try {
       developer.log('Syncing beneficiaries to server...', name: 'DataService');
       
+      // CRITICAL: Check if ALL training sites are synced before allowing beneficiary sync
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      
+      if (!allSynced) {
+        developer.log('Cannot sync beneficiaries: Not all training sites are synced', name: 'DataService');
+        return DataResponse(
+          success: false,
+          message: 'Cannot sync beneficiaries. Please sync all training sites first from the Conduct Training screen.',
+        );
+      }
+      
+      developer.log('✅ All training sites are synced, proceeding with beneficiary sync', name: 'DataService');
+      
       final beneficiaryRepo = BeneficiaryRepository();
       final unsyncedBeneficiaries = await beneficiaryRepo.getUnsynced();
       

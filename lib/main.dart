@@ -4,7 +4,6 @@ import 'package:irise/providers/auth_provider.dart';
 import 'package:irise/providers/sync_provider.dart';
 import 'package:irise/providers/dashboard_provider.dart';
 import 'package:irise/core/services/connectivity_service.dart';
-import 'package:irise/view/widgets/connectivity_banner.dart';
 import 'package:irise/route/app_router.dart';
 import 'package:provider/provider.dart';
 
@@ -48,19 +47,23 @@ class _MyAppState extends State<MyApp> {
               colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4CAF50)),
               useMaterial3: true,
               fontFamily: 'Roboto',
-              // Set cursor color to white globally
+              // Set text selection colors globally
               textSelectionTheme: const TextSelectionThemeData(
-                cursorColor: Colors.white,
-                selectionColor: Colors.white24,
-                selectionHandleColor: Colors.white,
+                cursorColor: Color(0xFF4CAF50),
+                selectionColor: Color(0xFFB2DFDB), // Light green selection
+                selectionHandleColor: Color(0xFF4CAF50),
               ),
             ),
             routerConfig: _router,
-            // builder: (context, child) {
-            //   return
-            //     child: child ?? const SizedBox.shrink(),
-            
-            // },
+            builder: (context, child) {
+              return GestureDetector(
+                onTap: () {
+                  // Dismiss keyboard when tapping outside input fields
+                  FocusManager.instance.primaryFocus?.unfocus();
+                },
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
           );
         },
       ),

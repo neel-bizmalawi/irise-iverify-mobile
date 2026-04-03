@@ -556,6 +556,9 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         // Get user ID from token storage
         final userId = await _tokenStorage.getUserId();
         
+        // Get current UTC date and time for distribution_date
+        final distributionDate = DateTime.now().toUtc().toIso8601String();
+        
         // Create updated beneficiary with household data
         // IMPORTANT: Preserve createdDate and createdBy - only update modifiedDate
         final updatedBeneficiary = _beneficiary!.copyWith(
@@ -569,6 +572,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           stoveStatusDelivery: _consent1 ? 'yes' : 'no',
           noOtherCookStovePresent: _consent2 ? 'yes' : 'no',
           primaryResidenceConfirmation: _consent3 ? 'yes' : 'no',
+          distributionDate: distributionDate, // Set distribution date in UTC
           // Preserve createdDate and createdBy from original beneficiary
           createdDate: _beneficiary!.createdDate,
           createdBy: _beneficiary!.createdBy,
@@ -1157,72 +1161,77 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           child: Column(
             children: [
               // Dashed border container for image
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.grey.shade300,
-                    width: 2,
-                    style: BorderStyle.solid,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Image display
-                    Container(
-                      height: 150,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: hasAnyImage
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: hasLocalImage
-                                  ? Image.file(image, fit: BoxFit.cover)
-                                  : NetworkImageWithRetry(
-                                      imageUrl: '${ApiConstants.baseUrl}$imagePath',
-                                      fit: BoxFit.cover,
-                                    ),
-                            )
-                          : Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.image, size: 48, color: Colors.grey.shade400),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'No image captured',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+              GestureDetector(
+                onTap: hasAnyImage ? () => _showImagePreview(context, hasLocalImage ? image : null, imagePath) : null,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.grey.shade300,
+                      width: 2,
+                      style: BorderStyle.solid,
                     ),
-                    // Preview label (only show if image exists)
-                    if (hasAnyImage)
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Image display
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        height: 150,
+                        width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
+                          color: Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'Preview',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        child: hasAnyImage
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: hasLocalImage
+                                    ? Image.file(image, fit: BoxFit.cover)
+                                    : NetworkImageWithRetry(
+                                        imageUrl: '${ApiConstants.baseUrl}$imagePath',
+                                        fit: BoxFit.cover,
+                                      ),
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      title.contains('HOUSE') ? 'Take House Image' : 'Take Cook Stove Image',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
+                      // Preview label (only show if image exists)
+                      if (hasAnyImage)
+                        IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Preview',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               
@@ -1259,23 +1268,24 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
               
               const SizedBox(height: 12),
               
-              // Remove Button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Remove'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF4CAF50),
-                    side: const BorderSide(color: Color(0xFF4CAF50)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              // Remove Button (only show if image exists)
+              if (hasAnyImage) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Remove'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF4CAF50),
+                      side: const BorderSide(color: Color(0xFF4CAF50)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-              
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
               
               // Info message
               Row(
@@ -1495,5 +1505,39 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     } catch (e) {
       return 'Unknown';
     }
+  }
+
+  void _showImagePreview(BuildContext context, File? localImage, String? serverImagePath) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(10),
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: localImage != null
+                    ? Image.file(localImage)
+                    : NetworkImageWithRetry(
+                        imageUrl: '${ApiConstants.baseUrl}$serverImagePath',
+                        fit: BoxFit.contain,
+                      ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
