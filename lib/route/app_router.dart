@@ -10,8 +10,12 @@ import 'package:irise/view/screen/household.dart';
 import 'package:irise/view/screen/login.dart';
 import 'package:irise/view/screen/modules.dart';
 import 'package:irise/view/screen/monitoring.dart';
+import 'package:irise/view/screen/monitoring_form.dart';
 import 'package:irise/view/screen/splash.dart';
 import 'package:irise/view/screen/training_point_identification.dart';
+import 'package:irise/view/screen/audit_list.dart';
+import 'package:irise/view/screen/audit_form.dart';
+import 'package:irise/view/screen/settings.dart';
 import 'package:irise/providers/auth_provider.dart';
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -190,6 +194,36 @@ GoRouter createRouter(AuthProvider authProvider) {
         },
       ),
 
+      GoRoute(
+        path: AppRoutes.auditList,
+        name: 'auditList',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const AuditListScreen(),
+          transitionsBuilder: _slideUpTransition,
+        ),
+      ),
+
+      GoRoute(
+        path: AppRoutes.auditForm,
+        name: 'auditForm',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const AuditFormScreen(),
+          transitionsBuilder: _slideUpTransition,
+        ),
+      ),
+
+      GoRoute(
+        path: AppRoutes.monitoringForm,
+        name: 'monitoringForm',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MonitoringFormScreen(),
+          transitionsBuilder: _slideUpTransition,
+        ),
+      ),
+
       // ─── Profile ──────────────────────────────────────────
       GoRoute(
         path: AppRoutes.profile,
@@ -197,6 +231,17 @@ GoRouter createRouter(AuthProvider authProvider) {
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const ProfileScreen(),
+          transitionsBuilder: _slideUpTransition,
+        ),
+      ),
+
+      // ─── Settings ─────────────────────────────────────────
+      GoRoute(
+        path: AppRoutes.settings,
+        name: 'settings',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SettingsScreen(),
           transitionsBuilder: _slideUpTransition,
         ),
       ),

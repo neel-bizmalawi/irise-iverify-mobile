@@ -143,7 +143,7 @@ class ModulesScreen extends StatelessWidget {
         context.push(AppRoutes.monitoring);
         break;
       case 5:
-        // context.push(AppRoutes.audit_process);
+        context.push(AppRoutes.auditList);
         break;
     }
   }

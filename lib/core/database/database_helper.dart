@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 11;
+  static const int _databaseVersion = 15;
 
   DatabaseHelper._internal();
 
@@ -205,6 +205,92 @@ class DatabaseHelper {
       CREATE TABLE training_sites_list (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         training_site TEXT UNIQUE NOT NULL
+      )
+    ''');
+
+    // Create monitoring_data table
+    await db.execute('''
+      CREATE TABLE monitoring_data (
+        monitoring_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        beneficiary_id INTEGER,
+        national_id TEXT,
+        agent_name TEXT,
+        visit_at TEXT,
+        old_gps_lat REAL,
+        old_gps_lng REAL,
+        new_gps_lat REAL,
+        new_gps_lng REAL,
+        device_serial_no TEXT,
+        new_device_serial_no TEXT,
+        hh_name_same TEXT,
+        stoves_present TEXT,
+        stove_being_used TEXT,
+        times_used_today INTEGER,
+        stove_condition TEXT,
+        photo_url TEXT,
+        nfc_tag_status TEXT,
+        user_satisfaction TEXT,
+        fuel_type TEXT,
+        daily_fuel_cost INTEGER,
+        savings_3_months INTEGER,
+        est_fuel_last3meals_kg INTEGER,
+        needs_training TEXT,
+        training_type TEXT,
+        training_performed TEXT,
+        training_not_done_reason TEXT,
+        needs_more_visits TEXT,
+        more_visits_reason TEXT,
+        health_hospital_less TEXT,
+        health_better_air TEXT,
+        photo_path TEXT,
+        s_is_sync INTEGER DEFAULT 0,
+        created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        created_by INTEGER,
+        modified_date TEXT,
+        modified_by INTEGER,
+        server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'active'
+      )
+    ''');
+
+    // Create audit table
+    await db.execute('''
+      CREATE TABLE audit (
+        audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        household_name TEXT,
+        national_id TEXT,
+        phone_number TEXT,
+        visit_date TEXT,
+        females_below_18 INTEGER,
+        females_above_18 INTEGER,
+        males_below_18 INTEGER,
+        males_above_18 INTEGER,
+        has_cookstove_observe TEXT,
+        cooking_method_before TEXT,
+        fuel_used_before TEXT,
+        other_cooking_device_before TEXT,
+        payment_requested TEXT,
+        payment_requested_by TEXT,
+        training_before_receiving TEXT,
+        read_conset TEXT,
+        sign_consent TEXT,
+        delivered_condition TEXT,
+        date_of_cookstove_recieved TEXT,
+        where_received TEXT,
+        where_trained TEXT,
+        latitude REAL,
+        longitude REAL,
+        photo_path_cook_stove TEXT,
+        photo_path_cook_stove_area TEXT,
+        remarks TEXT,
+        s_is_sync INTEGER DEFAULT 0,
+        created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        created_by INTEGER,
+        modified_date TEXT,
+        modified_by INTEGER,
+        server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'active'
       )
     ''');
 
@@ -827,6 +913,152 @@ class DatabaseHelper {
       }
       
       developer.log('Database migration to version 11 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 12) {
+      // Migration from version 11 to 12: Add monitoring_data table
+      developer.log('Migrating to version 12: Adding monitoring_data table', name: 'DatabaseHelper');
+      
+      try {
+        // Create monitoring_data table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS monitoring_data (
+            monitoring_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            national_id TEXT,
+            agent_name TEXT,
+            visit_at TEXT,
+            old_gps_lat REAL,
+            old_gps_lng REAL,
+            new_gps_lat REAL,
+            new_gps_lng REAL,
+            device_serial_no TEXT,
+            new_device_serial_no TEXT,
+            hh_name_same TEXT,
+            stoves_present TEXT,
+            stove_being_used TEXT,
+            times_used_today INTEGER,
+            stove_condition TEXT,
+            photo_url TEXT,
+            nfc_tag_status TEXT,
+            user_satisfaction TEXT,
+            fuel_type TEXT,
+            daily_fuel_cost INTEGER,
+            savings_3_months INTEGER,
+            est_fuel_last3meals_kg INTEGER,
+            needs_training TEXT,
+            training_type TEXT,
+            training_performed TEXT,
+            training_not_done_reason TEXT,
+            needs_more_visits TEXT,
+            more_visits_reason TEXT,
+            health_hospital_less TEXT,
+            health_better_air TEXT,
+            photo_path TEXT,
+            created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+          )
+        ''');
+        
+        developer.log('Successfully added monitoring_data table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 12 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 12 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 13) {
+      // Migration from version 12 to 13: Add audit table
+      developer.log('Migrating to version 13: Adding audit table', name: 'DatabaseHelper');
+      
+      try {
+        // Create audit table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS audit (
+            audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            household_name TEXT,
+            national_id TEXT,
+            phone_number TEXT,
+            visit_date TEXT,
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            has_cookstove_observe TEXT,
+            cooking_method_before TEXT,
+            fuel_used_before TEXT,
+            other_cooking_device_before TEXT,
+            payment_requested TEXT,
+            payment_requested_by TEXT,
+            training_before_receiving TEXT,
+            read_conset TEXT,
+            sign_consent TEXT,
+            delivered_condition TEXT,
+            date_of_cookstove_recieved TEXT,
+            where_received TEXT,
+            where_trained TEXT,
+            latitude REAL,
+            longitude REAL,
+            photo_path_cook_stove TEXT,
+            photo_path_cook_stove_area TEXT,
+            remarks TEXT,
+            s_is_sync INTEGER DEFAULT 0,
+            created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+          )
+        ''');
+        
+        developer.log('Successfully added audit table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 13 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 13 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 14) {
+      // Migration from version 13 to 14: Add s_is_sync column to monitoring_data table
+      developer.log('Migrating to version 14: Adding s_is_sync to monitoring_data', name: 'DatabaseHelper');
+      
+      try {
+        // Add s_is_sync column to monitoring_data table
+        await db.execute('ALTER TABLE monitoring_data ADD COLUMN s_is_sync INTEGER DEFAULT 0');
+        
+        developer.log('Successfully added s_is_sync column to monitoring_data table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 14 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 14 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 15) {
+      // Migration from version 14 to 15: Add beneficiary_id column to monitoring_data table
+      developer.log('Migrating to version 15: Adding beneficiary_id to monitoring_data', name: 'DatabaseHelper');
+      
+      try {
+        // Add beneficiary_id column to monitoring_data table
+        await db.execute('ALTER TABLE monitoring_data ADD COLUMN beneficiary_id INTEGER');
+        
+        developer.log('Successfully added beneficiary_id column to monitoring_data table', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 15 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 15 completed', name: 'DatabaseHelper');
     }
   }
 

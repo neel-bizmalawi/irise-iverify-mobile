@@ -18,6 +18,12 @@ class ApiConstants {
   static const String beneficiaryList = '/beneficiary/list';
   static const String beneficiaryBeneSync = '/beneficiary/bene_sync';
   static const String beneficiaryData = '/beneficiary/Beneficiary_data';
+  static const String auditList = '/audit/list';
+  static const String auditSync = '/audit/audit_sync';
+  static const String auditData = '/audit/audit_data';
+  static const String monitoringList = '/monitoring/list';
+  static const String monitoringSync = '/monitoring/moni_sync';
+  static const String monitoringData = '/monitoring/monitoring_data';
   
   // Timeout durations
   static const Duration connectTimeout = Duration(seconds: 30);

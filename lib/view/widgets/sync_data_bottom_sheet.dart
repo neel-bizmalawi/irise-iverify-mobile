@@ -182,9 +182,9 @@ class _SyncDataBottomSheetState extends State<SyncDataBottomSheet>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'Syncing New Data...',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
@@ -192,7 +192,11 @@ class _SyncDataBottomSheetState extends State<SyncDataBottomSheet>
                 ),
                 if (_status != SyncStatus.downloading)
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(false),
+                    onPressed: () {
+                      // Return true if sync was completed successfully, false otherwise
+                      final shouldReturnTrue = _status == SyncStatus.completed;
+                      Navigator.of(context).pop(shouldReturnTrue);
+                    },
                     icon: const Icon(Icons.close, size: 20),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),

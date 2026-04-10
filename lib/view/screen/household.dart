@@ -27,11 +27,14 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   bool _hasLoadedOnce = false;
   List<Beneficiary> _households = [];
   List<Beneficiary> _filteredHouseholds = [];
+  bool _allTrainingSitesSynced = true;
+  int _unsyncedTrainingSitesCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadHouseholds();
+    _checkTrainingSitesStatus();
     _searchController.addListener(_filterHouseholds);
     _scrollController.addListener(_onScroll);
   }
@@ -43,6 +46,24 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
     if (_hasLoadedOnce && ModalRoute.of(context)?.isCurrent == true) {
       developer.log('Screen became active, reloading households...', name: 'HouseholdScreen');
       _loadHouseholds();
+      _checkTrainingSitesStatus();
+    }
+  }
+
+  Future<void> _checkTrainingSitesStatus() async {
+    try {
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      final unsyncedCount = await trainingSiteRepo.getUnsyncedCount();
+      
+      setState(() {
+        _allTrainingSitesSynced = allSynced;
+        _unsyncedTrainingSitesCount = unsyncedCount;
+      });
+      
+      developer.log('Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount', name: 'HouseholdScreen');
+    } catch (e) {
+      developer.log('Error checking training sites status: $e', name: 'HouseholdScreen');
     }
   }
 
@@ -160,7 +181,40 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       return;
     }
     
-    // CRITICAL: Check if training site is synced before allowing beneficiary sync
+    // CRITICAL: Check if ALL training sites are synced before allowing household sync
+    try {
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      
+      if (!allSynced) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot sync households. Please sync all training sites first from the Conduct Training screen.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      developer.log('Error checking training sites sync status: $e', name: 'HouseholdScreen');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking training sites: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Additional check: Verify the specific training site for this household is synced
     if (household.trainingSite != null && household.trainingSite!.isNotEmpty) {
       try {
         final trainingSiteRepo = TrainingSiteRepository();
@@ -172,13 +226,13 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           orElse: () => throw Exception('Training site not found'),
         );
         
-        // Check if training site is synced
+        // Double-check if this specific training site is synced
         if (trainingSite.sIsSync == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Cannot sync household. Please sync the training site "${household.trainingSite}" first from the Conduct Training screen.',
+                  'Cannot sync household. The training site "${household.trainingSite}" is not synced yet.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 5),
@@ -188,11 +242,11 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           return;
         }
       } catch (e) {
-        developer.log('Error checking training site sync status: $e', name: 'HouseholdScreen');
+        developer.log('Error checking specific training site sync status: $e', name: 'HouseholdScreen');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Training site "${household.trainingSite}" not found. Please sync training sites first.'),
+              content: Text('Error: Training site "${household.trainingSite}" not found.'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -486,6 +540,58 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                 ),
 
                 const SizedBox(height: 16),
+
+                // ── Warning banner if training sites are not all synced ──
+                if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFF9800),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Color(0xFFFF9800),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Training Sites Not Synced',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$_unsyncedTrainingSitesCount training site${_unsyncedTrainingSitesCount > 1 ? 's' : ''} must be synced before households can be synced.',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
+                  const SizedBox(height: 16),
 
                 // Household List
                 Expanded(

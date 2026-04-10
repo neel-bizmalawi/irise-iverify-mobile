@@ -65,8 +65,11 @@ class _SimpleDropdownState<T> extends State<SimpleDropdown<T>> {
                       ? Colors.black87
                       : Colors.black38,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             widget.isLoading
                 ? const SizedBox(
                     width: 16,
@@ -98,9 +101,12 @@ class _SimpleDropdownBottomSheet<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxHeight = screenHeight * 0.5;
+    
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.5,
+        maxHeight: maxHeight,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -125,8 +131,11 @@ class _SimpleDropdownBottomSheet<T> extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: const Icon(Icons.close, color: Colors.black54),
@@ -184,14 +193,18 @@ class _SimpleDropdownBottomSheet<T> extends StatelessWidget {
                                     color: Colors.black87,
                                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                                   ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (isSelected)
+                              if (isSelected) ...[
+                                const SizedBox(width: 8),
                                 const Icon(
                                   Icons.check_circle,
                                   color: Color(0xFF4CAF50),
                                   size: 20,
                                 ),
+                              ],
                             ],
                           ),
                         ),

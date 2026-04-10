@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
+import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/core/utils/image_utils.dart';
 import 'package:irise/core/storage/token_storage.dart';
@@ -475,46 +476,38 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         return;
       }
       
-      // Check for duplicate Device Serial Number (double-check before saving)
-      if (_isDeviceSerialNoDuplicate) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Device Serial No already exists. Please use a different one.'),
-            backgroundColor: Colors.red,
-          ),
+      // Check for duplicate Device Serial Number only if it's provided
+      if (_deviceSerialNoController.text.trim().isNotEmpty) {
+        if (_isDeviceSerialNoDuplicate) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Device Serial No already exists. Please use a different one.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        
+        // Final check: Verify Device Serial No doesn't exist in database
+        final deviceSerialNoExists = await _beneficiaryRepo.isDeviceSerialNoExists(
+          _deviceSerialNoController.text.trim(),
+          excludeBeneficiaryId: _beneficiary?.beneficiaryId,
+          excludeOfflineId: _beneficiary?.offlineId,
         );
-        return;
+        
+        if (deviceSerialNoExists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Device Serial No already exists. Please use a different one.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
       }
       
-      // Final check: Verify Device Serial No doesn't exist in database
-      final deviceSerialNoExists = await _beneficiaryRepo.isDeviceSerialNoExists(
-        _deviceSerialNoController.text.trim(),
-        excludeBeneficiaryId: _beneficiary?.beneficiaryId,
-        excludeOfflineId: _beneficiary?.offlineId,
-      );
-      
-      if (deviceSerialNoExists) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Device Serial No already exists. Please use a different one.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
-        return;
-      }
-      
-      // Validate all mandatory fields
-      if (_deviceSerialNoController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Device Serial No is required'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
+      // Validate mandatory fields (Device Serial No is now optional)
       if (_latitude == null || _longitude == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -556,13 +549,16 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         // Get user ID from token storage
         final userId = await _tokenStorage.getUserId();
         
-        // Get current UTC date and time for distribution_date
-        final distributionDate = DateTime.now().toUtc().toIso8601String();
+        // CRITICAL: Only set distribution_date if it's null (first time saving household data)
+        // Once set, it should NEVER be changed again
+        final distributionDate = _beneficiary!.distributionDate ?? DateTime.now().toUtc().toIso8601String();
         
         // Create updated beneficiary with household data
         // IMPORTANT: Preserve createdDate and createdBy - only update modifiedDate
         final updatedBeneficiary = _beneficiary!.copyWith(
-          deviceSerialNo: _deviceSerialNoController.text.trim(),
+          deviceSerialNo: _deviceSerialNoController.text.trim().isEmpty 
+              ? null 
+              : _deviceSerialNoController.text.trim(),
           latitude: _latitude,
           longitude: _longitude,
           housePic: _houseImagePath,
@@ -572,7 +568,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           stoveStatusDelivery: _consent1 ? 'yes' : 'no',
           noOtherCookStovePresent: _consent2 ? 'yes' : 'no',
           primaryResidenceConfirmation: _consent3 ? 'yes' : 'no',
-          distributionDate: distributionDate, // Set distribution date in UTC
+          distributionDate: distributionDate, // Set ONLY on first save, preserve on subsequent updates
           // Preserve createdDate and createdBy from original beneficiary
           createdDate: _beneficiary!.createdDate,
           createdBy: _beneficiary!.createdBy,
@@ -635,6 +631,81 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         ),
       );
       return;
+    }
+    
+    // CRITICAL: Check if ALL training sites are synced before allowing household sync
+    try {
+      final trainingSiteRepo = TrainingSiteRepository();
+      final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
+      
+      if (!allSynced) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot sync households. Please sync all training sites first from the Conduct Training screen.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      developer.log('Error checking training sites sync status: $e', name: 'EditHouseholdScreen');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking training sites: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Additional check: Verify the specific training site for this household is synced
+    if (_beneficiary!.trainingSite != null && _beneficiary!.trainingSite!.isNotEmpty) {
+      try {
+        final trainingSiteRepo = TrainingSiteRepository();
+        final allTrainingSites = await trainingSiteRepo.getAll();
+        
+        // Find the training site by name
+        final trainingSite = allTrainingSites.firstWhere(
+          (site) => site.trainingSite == _beneficiary!.trainingSite,
+          orElse: () => throw Exception('Training site not found'),
+        );
+        
+        // Double-check if this specific training site is synced
+        if (trainingSite.sIsSync == 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Cannot sync household. The training site "${_beneficiary!.trainingSite}" is not synced yet.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        developer.log('Error checking specific training site sync status: $e', name: 'EditHouseholdScreen');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: Training site "${_beneficiary!.trainingSite}" not found.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
     }
     
     try {
@@ -926,25 +997,13 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        RichText(
-          text: const TextSpan(
-            text: 'DEVICE SERIAL NO',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-              letterSpacing: 0.5,
-            ),
-            children: [
-              TextSpan(
-                text: ' *',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+        const Text(
+          'DEVICE SERIAL NO',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+            letterSpacing: 0.5,
           ),
         ),
         const SizedBox(height: 8),
@@ -969,11 +1028,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   border: InputBorder.none,
                 ),
                 validator: (value) {
-                  if (value?.isEmpty ?? true) return 'Device Serial No is required';
-                  
-                  // Validate alphanumeric only
-                  if (!RegExp(r'^[A-Z0-9]+$').hasMatch(value!)) {
-                    return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
+                  // Field is now optional, only validate format if value is provided
+                  if (value != null && value.isNotEmpty) {
+                    // Validate alphanumeric only
+                    if (!RegExp(r'^[A-Z0-9]+$').hasMatch(value)) {
+                      return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
+                    }
                   }
                   
                   return null;
@@ -1249,13 +1309,13 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
               
               const SizedBox(height: 16),
               
-              // Retake Button
+              // Take Photo / Retake Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: onRetake,
                   icon: const Icon(Icons.camera_alt, size: 18),
-                  label: const Text('Retake'),
+                  label: Text(hasAnyImage ? 'Retake' : 'Take Photo'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,

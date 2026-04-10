@@ -128,20 +128,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                       ),
-                      // Notification icon
+                      // Settings button
                       // IconButton(
-                      //   icon: const Icon(Icons.notifications_outlined,
-                      //       color: Colors.black87),
-                      //   onPressed: () {},
+                      //   icon: const Icon(Icons.settings,
+                      //       color: Colors.black87, size: 22),
+                      //   onPressed: () => context.push(AppRoutes.settings),
+                      //   tooltip: 'Settings',
                       // ),
+                      const SizedBox(width: 4),
                       // Avatar sits over the green circle
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.white.withValues(alpha: 0.3),
-                          radius: 20,
-                          child: const Icon(Icons.person,
-                              color: Colors.white, size: 24),
+                        child: GestureDetector(onTap: () => context.push(AppRoutes.settings),
+                          child: CircleAvatar(
+                            backgroundColor: Colors.white.withValues(alpha: 0.3),
+                            radius: 20,
+                            child: const Icon(Icons.person,
+                                color: Colors.white, size: 24),
+                          ),
                         ),
                       ),
                     ],
@@ -462,14 +466,65 @@ class _DataOverviewCard extends StatelessWidget {
           // Get existing count from database
           final existingCount = dashboardProvider.totalBeneficiaries;
           
-          // Always show that we need to check for new data
-          // The pagination will handle fetching all pages
-          return SyncCheckResult(
-            hasNewData: true,
-            newRecordsCount: 0, // Will be determined during download
-            existingRecords: existingCount,
-            message: 'Checking for updates...',
-          );
+          // Check if we have last sync date
+          final hasLastSync = dashboardProvider.lastBeneficiarySync != null;
+          
+          if (hasLastSync) {
+            // Incremental sync - check if there are actually new records
+            final lastSyncDate = dashboardProvider.lastBeneficiarySync!.toUtc().toIso8601String();
+            
+            try {
+              // Create DataService instance to check for updates
+              final dataService = DataService();
+              final response = await dataService.getUpdatedBeneficiaries(lastSyncDate);
+              
+              if (response.success && response.data != null) {
+                final newRecordsCount = response.data!.length;
+                
+                if (newRecordsCount > 0) {
+                  // There are new records to download
+                  return SyncCheckResult(
+                    hasNewData: true,
+                    newRecordsCount: newRecordsCount,
+                    existingRecords: existingCount,
+                    message: '$newRecordsCount new records available',
+                  );
+                } else {
+                  // No new records - already up to date
+                  return SyncCheckResult(
+                    hasNewData: false,
+                    newRecordsCount: 0,
+                    existingRecords: existingCount,
+                    message: 'All data is up to date',
+                  );
+                }
+              } else {
+                // Error checking for updates - assume there might be new data
+                return SyncCheckResult(
+                  hasNewData: true,
+                  newRecordsCount: 0,
+                  existingRecords: existingCount,
+                  message: 'Checking for updates...',
+                );
+              }
+            } catch (e) {
+              // Error checking for updates - assume there might be new data
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount: 0,
+                existingRecords: existingCount,
+                message: 'Checking for updates...',
+              );
+            }
+          } else {
+            // Initial sync - need to download all data
+            return SyncCheckResult(
+              hasNewData: true,
+              newRecordsCount: 0, // Will be determined during download
+              existingRecords: existingCount,
+              message: 'Initial sync required',
+            );
+          }
         },
         onDownload: (onProgress) async {
           try {
@@ -481,6 +536,244 @@ class _DataOverviewCard extends StatelessWidget {
             
             // Perform sync with real-time progress updates
             final result = await dashboardProvider.syncBeneficiaries(
+              onProgress: (status, current, total) {
+                if (total > 0) {
+                  totalRecordsFromServer = total;
+                  final remaining = total - current;
+                  
+                  // Update progress: existing, downloaded, remaining
+                  onProgress(existingCount, current, remaining);
+                }
+              },
+            );
+            
+            if (result.success) {
+              // Refresh dashboard data to get actual counts
+              await dashboardProvider.refreshData();
+              
+              // Final progress update - all downloaded, 0 remaining
+              if (totalRecordsFromServer > 0) {
+                onProgress(existingCount, totalRecordsFromServer, 0);
+              }
+              
+              return true;
+            }
+            
+            return false;
+          } catch (e) {
+            return false;
+          }
+        },
+      );
+
+      // Show result message if sync was successful
+      if (result == true && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$moduleName data synced successfully!'),
+            backgroundColor: const Color(0xFF4CAF50),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (title.contains('MONITORING')) {
+      // Handle Monitoring module with pagination sync
+      final result = await showSyncDataBottomSheet(
+        context: context,
+        moduleName: moduleName,
+        onCheckForData: () async {
+          // Get existing count from database
+          final existingCount = dashboardProvider.totalMonitoring;
+          
+          // Check if we have last sync date
+          final hasLastSync = dashboardProvider.lastMonitoringSync != null;
+          
+          if (hasLastSync) {
+            // Incremental sync - check if there are actually new records
+            final lastSyncDate = dashboardProvider.lastMonitoringSync!.toUtc().toIso8601String();
+            
+            try {
+              // Create DataService instance to check for updates
+              final dataService = DataService();
+              final response = await dataService.getUpdatedMonitoring(lastSyncDate);
+              
+              if (response.success && response.data != null) {
+                final newRecordsCount = response.data!.length;
+                
+                if (newRecordsCount > 0) {
+                  // There are new records to download
+                  return SyncCheckResult(
+                    hasNewData: true,
+                    newRecordsCount: newRecordsCount,
+                    existingRecords: existingCount,
+                    message: '$newRecordsCount new records available',
+                  );
+                } else {
+                  // No new records - already up to date
+                  return SyncCheckResult(
+                    hasNewData: false,
+                    newRecordsCount: 0,
+                    existingRecords: existingCount,
+                    message: 'All data is up to date',
+                  );
+                }
+              } else {
+                // Error checking for updates - assume there might be new data
+                return SyncCheckResult(
+                  hasNewData: true,
+                  newRecordsCount: 0,
+                  existingRecords: existingCount,
+                  message: 'Checking for updates...',
+                );
+              }
+            } catch (e) {
+              // Error checking for updates - assume there might be new data
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount: 0,
+                existingRecords: existingCount,
+                message: 'Checking for updates...',
+              );
+            }
+          } else {
+            // Initial sync - need to download all data
+            return SyncCheckResult(
+              hasNewData: true,
+              newRecordsCount: 0, // Will be determined during download
+              existingRecords: existingCount,
+              message: 'Initial sync required',
+            );
+          }
+        },
+        onDownload: (onProgress) async {
+          try {
+            // Get existing count before sync
+            final existingCount = dashboardProvider.totalMonitoring;
+            
+            // Track total records from server
+            int totalRecordsFromServer = 0;
+            
+            // Perform sync with real-time progress updates
+            final result = await dashboardProvider.syncMonitoring(
+              onProgress: (status, current, total) {
+                if (total > 0) {
+                  totalRecordsFromServer = total;
+                  final remaining = total - current;
+                  
+                  // Update progress: existing, downloaded, remaining
+                  onProgress(existingCount, current, remaining);
+                }
+              },
+            );
+            
+            if (result.success) {
+              // Refresh dashboard data to get actual counts
+              await dashboardProvider.refreshData();
+              
+              // Final progress update - all downloaded, 0 remaining
+              if (totalRecordsFromServer > 0) {
+                onProgress(existingCount, totalRecordsFromServer, 0);
+              }
+              
+              return true;
+            }
+            
+            return false;
+          } catch (e) {
+            return false;
+          }
+        },
+      );
+
+      // Show result message if sync was successful
+      if (result == true && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$moduleName data synced successfully!'),
+            backgroundColor: const Color(0xFF4CAF50),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (title.contains('AUDIT')) {
+      // Handle Audit module with pagination sync
+      final result = await showSyncDataBottomSheet(
+        context: context,
+        moduleName: moduleName,
+        onCheckForData: () async {
+          // Get existing count from database
+          final existingCount = dashboardProvider.totalAudit;
+          
+          // Check if we have last sync date
+          final hasLastSync = dashboardProvider.lastAuditSync != null;
+          
+          if (hasLastSync) {
+            // Incremental sync - check if there are actually new records
+            final lastSyncDate = dashboardProvider.lastAuditSync!.toUtc().toIso8601String();
+            
+            try {
+              // Create DataService instance to check for updates
+              final dataService = DataService();
+              final response = await dataService.getUpdatedAudits(lastSyncDate);
+              
+              if (response.success && response.data != null) {
+                final newRecordsCount = response.data!.length;
+                
+                if (newRecordsCount > 0) {
+                  // There are new records to download
+                  return SyncCheckResult(
+                    hasNewData: true,
+                    newRecordsCount: newRecordsCount,
+                    existingRecords: existingCount,
+                    message: '$newRecordsCount new records available',
+                  );
+                } else {
+                  // No new records - already up to date
+                  return SyncCheckResult(
+                    hasNewData: false,
+                    newRecordsCount: 0,
+                    existingRecords: existingCount,
+                    message: 'All data is up to date',
+                  );
+                }
+              } else {
+                // Error checking for updates - assume there might be new data
+                return SyncCheckResult(
+                  hasNewData: true,
+                  newRecordsCount: 0,
+                  existingRecords: existingCount,
+                  message: 'Checking for updates...',
+                );
+              }
+            } catch (e) {
+              // Error checking for updates - assume there might be new data
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount: 0,
+                existingRecords: existingCount,
+                message: 'Checking for updates...',
+              );
+            }
+          } else {
+            // Initial sync - need to download all data
+            return SyncCheckResult(
+              hasNewData: true,
+              newRecordsCount: 0, // Will be determined during download
+              existingRecords: existingCount,
+              message: 'Initial sync required',
+            );
+          }
+        },
+        onDownload: (onProgress) async {
+          try {
+            // Get existing count before sync
+            final existingCount = dashboardProvider.totalAudit;
+            
+            // Track total records from server
+            int totalRecordsFromServer = 0;
+            
+            // Perform sync with real-time progress updates
+            final result = await dashboardProvider.syncAudit(
               onProgress: (status, current, total) {
                 if (total > 0) {
                   totalRecordsFromServer = total;

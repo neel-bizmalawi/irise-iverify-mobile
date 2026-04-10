@@ -1552,13 +1552,13 @@ class _BeneficiaryRegistrationScreenState
         
         const SizedBox(height: 16),
         
-        // Retake Button (full width)
+        // Take Photo / Retake Button (full width)
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: onTakePhoto,
             icon: const Icon(Icons.camera_alt, size: 18),
-            label: const Text('Retake'),
+            label: Text(hasAnyImage ? 'Retake' : 'Take Photo'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,

@@ -16,6 +16,7 @@ class AppRoutes {
 
   static const String monitoring = '/dashboard/monitoring';
   static const String monitoringDetail = '/dashboard/monitoring/:id';
+  static const String monitoringForm = '/monitoring_form';
 
   static const String modules = '/dashboard/modules';
   static const String training_point_identification =
@@ -26,8 +27,11 @@ class AppRoutes {
   static const String conduct_training_list = '/conduct_training_list';
   static const String household = '/household';
   static const String editHousehold = '/edit_household';
+  static const String auditList = '/audit_list';
+  static const String auditForm = '/audit_form';
   // Profile / Settings
   static const String profile = '/profile';
+  static const String settings = '/settings';
   static const String notifications = '/notifications';
   static const String forgotPassword = '/forgot-password';
 }

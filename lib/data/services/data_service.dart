@@ -17,6 +17,10 @@ import 'package:irise/data/repositories/cookstove_repository.dart';
 import 'package:irise/data/repositories/training_site_list_repository.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
+import 'package:irise/data/models/audit.dart';
+import 'package:irise/data/models/monitoring.dart';
+import 'package:irise/data/repositories/monitoring_repository.dart';
+import 'package:irise/data/repositories/audit_repository.dart';
 import 'package:irise/core/database/database_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:developer' as developer;
@@ -2290,6 +2294,787 @@ class DataService {
       return DataResponse(
         success: false,
         message: 'Failed to sync updated beneficiaries: $e',
+      );
+    }
+  }
+
+  /// POST /audit/audit_data
+  /// Fetches updated/synced audit records from server after a specific date
+  /// Used for incremental sync after initial full sync
+  Future<DataResponse<List<Audit>>> getUpdatedAudits(String lastSyncDate) async {
+    try {
+      final timezone = _getDeviceTimezone();
+      
+      developer.log('Fetching updated audits since: $lastSyncDate', name: 'DataService');
+      developer.log('Device timezone: $timezone', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.auditData,
+        data: {
+          'date': lastSyncDate,
+          'timezone': timezone,
+        },
+      );
+      
+      if (response.data != null) {
+        List<Audit> audits = [];
+        
+        // Handle different response structures
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            audits = data
+                .map((json) => Audit.fromJson(json))
+                .toList();
+          }
+        } else if (response.data is List) {
+          audits = (response.data as List)
+              .map((json) => Audit.fromJson(json))
+              .toList();
+        }
+        
+        developer.log('Fetched ${audits.length} updated audits', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: audits,
+          message: 'Updated audits fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching updated audits: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch updated audits',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// POST /monitoring/monitoring_data
+  /// Fetches updated/synced monitoring records from server after a specific date
+  /// Used for incremental sync after initial full sync
+  Future<DataResponse<List<Monitoring>>> getUpdatedMonitoring(String lastSyncDate) async {
+    try {
+      final timezone = _getDeviceTimezone();
+      
+      developer.log('Fetching updated monitoring records since: $lastSyncDate', name: 'DataService');
+      developer.log('Device timezone: $timezone', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.monitoringData,
+        data: {
+          'date': lastSyncDate,
+          'timezone': timezone,
+        },
+      );
+      
+      if (response.data != null) {
+        List<Monitoring> monitoringRecords = [];
+        
+        // Handle different response structures
+        if (response.data is Map && response.data['data'] != null) {
+          final data = response.data['data'];
+          if (data is List) {
+            monitoringRecords = data
+                .map((json) => Monitoring.fromJson(json))
+                .toList();
+          }
+        } else if (response.data is List) {
+          monitoringRecords = (response.data as List)
+              .map((json) => Monitoring.fromJson(json))
+              .toList();
+        }
+        
+        developer.log('Fetched ${monitoringRecords.length} updated monitoring records', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: monitoringRecords,
+          message: 'Updated monitoring records fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching updated monitoring records: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch updated monitoring records',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// POST /monitoring/list with pagination
+  /// Fetches monitoring records from server with pagination support
+  Future<DataResponse<PaginatedResponse<Map<String, dynamic>>>> getMonitoringListPaginated({
+    int page = 1,
+    int limit = 50,
+  }) async {
+    try {
+      developer.log('Fetching monitoring list - page: $page, limit: $limit', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.monitoringList,
+        data: {
+          'page': page,
+          'limit': limit,
+        },
+      );
+      
+      if (response.data != null && response.data is Map) {
+        final paginatedData = PaginatedResponse<Map<String, dynamic>>.fromJson(
+          response.data,
+          (json) => json as Map<String, dynamic>,
+        );
+        
+        developer.log('Fetched ${paginatedData.data.length} monitoring records (page $page)', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: paginatedData,
+          message: 'Monitoring list fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching monitoring list: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch monitoring list',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// POST /audit/list with pagination
+  /// Fetches audit records from server with pagination support
+  Future<DataResponse<PaginatedResponse<Map<String, dynamic>>>> getAuditListPaginated({
+    int page = 1,
+    int limit = 50,
+  }) async {
+    try {
+      developer.log('Fetching audit list - page: $page, limit: $limit', name: 'DataService');
+      
+      final response = await _dioClient.post(
+        ApiConstants.auditList,
+        data: {
+          'page': page,
+          'limit': limit,
+        },
+      );
+      
+      if (response.data != null && response.data is Map) {
+        final paginatedData = PaginatedResponse<Map<String, dynamic>>.fromJson(
+          response.data,
+          (json) => json as Map<String, dynamic>,
+        );
+        
+        developer.log('Fetched ${paginatedData.data.length} audit records (page $page)', name: 'DataService');
+        
+        return DataResponse(
+          success: true,
+          data: paginatedData,
+          message: 'Audit list fetched successfully',
+        );
+      }
+      
+      return DataResponse(
+        success: false,
+        message: 'No data received',
+      );
+    } on DioException catch (e) {
+      developer.log('Error fetching audit list: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to fetch audit list',
+      );
+    } catch (e) {
+      developer.log('Unexpected error: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred',
+      );
+    }
+  }
+
+  /// POST /monitoring/moni_sync
+  /// Syncs monitoring records to server
+  Future<DataResponse<Map<String, dynamic>>> syncMonitoringToServer() async {
+    try {
+      developer.log('Syncing monitoring records to server...', name: 'DataService');
+      
+      final monitoringRepo = MonitoringRepository();
+      final unsyncedMonitoring = await monitoringRepo.getUnsynced();
+      
+      if (unsyncedMonitoring.isEmpty) {
+        developer.log('No unsynced monitoring records to sync', name: 'DataService');
+        return DataResponse(
+          success: true,
+          data: {'synced': 0},
+          message: 'No monitoring records to sync',
+        );
+      }
+      
+      developer.log('Found ${unsyncedMonitoring.length} unsynced monitoring records', name: 'DataService');
+      
+      // Prepare FormData for each monitoring record
+      int syncedCount = 0;
+      List<Map<String, dynamic>> errors = [];
+      
+      for (var monitoring in unsyncedMonitoring) {
+        try {
+          final formData = FormData.fromMap({
+            'beneficiary_id': monitoring.userId,
+            'national_id': monitoring.nationalId ?? '',
+            'new_device_serial_no': monitoring.newDeviceSerialNo ?? '',
+            'hh_name_same': monitoring.hhNameSame ?? '',
+            'stoves_present': monitoring.stovesPresent ?? '',
+            'stove_being_used': monitoring.stoveBeingUsed ?? '',
+            'times_used_today': monitoring.timesUsedToday ?? 0,
+            'stove_condition': monitoring.stoveCondition ?? '',
+            'photo_path': monitoring.photoPath ?? '',
+            'user_satisfaction': monitoring.userSatisfaction ?? '',
+            'fuel_type': monitoring.fuelType ?? '',
+            'daily_fuel_cost': monitoring.dailyFuelCost ?? 0,
+            'savings_3_months': monitoring.savings3Months ?? 0,
+            'est_fuel_last3meals_kg': monitoring.estFuelLast3mealsKg ?? 0,
+            'needs_training': monitoring.needsTraining ?? '',
+            'training_type': monitoring.trainingType ?? '',
+            'training_performed': monitoring.trainingPerformed ?? '',
+            'needs_more_visits': monitoring.needsMoreVisits ?? '',
+            'more_visits_reason': monitoring.moreVisitsReason ?? '',
+            'health_hospital_less': monitoring.healthHospitalLess ?? '',
+            'health_better_air': monitoring.healthBetterAir ?? '',
+            'new_gps_lng': monitoring.newGpsLng ?? '',
+            'new_gps_lat': monitoring.newGpsLat ?? '',
+            'visit_at': monitoring.visitAt ?? '',
+            'status': monitoring.status ?? 'active',
+          });
+          
+          final response = await _dioClient.post(
+            ApiConstants.monitoringSync,
+            data: formData,
+          );
+          
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            // Mark as synced in local database
+            if (monitoring.monitoringId != null) {
+              await monitoringRepo.markAsSynced(monitoring.monitoringId!);
+              syncedCount++;
+              developer.log('Synced monitoring record ${monitoring.monitoringId}', name: 'DataService');
+            }
+          }
+        } catch (e) {
+          developer.log('Error syncing monitoring ${monitoring.monitoringId}: $e', name: 'DataService');
+          errors.add({
+            'monitoring_id': monitoring.monitoringId,
+            'error': e.toString(),
+          });
+        }
+      }
+      
+      developer.log('Successfully synced $syncedCount monitoring records', name: 'DataService');
+      
+      return DataResponse(
+        success: true,
+        data: {
+          'synced': syncedCount,
+          'errors': errors,
+        },
+        message: 'Successfully synced $syncedCount monitoring records',
+      );
+    } on DioException catch (e) {
+      developer.log('Error syncing monitoring: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to sync monitoring',
+      );
+    } catch (e) {
+      developer.log('Unexpected error syncing monitoring: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred: $e',
+      );
+    }
+  }
+
+  /// POST /audit/audit_sync
+  /// Syncs audit records to server
+  Future<DataResponse<Map<String, dynamic>>> syncAuditToServer() async {
+    try {
+      developer.log('Syncing audit records to server...', name: 'DataService');
+      
+      final auditRepo = AuditRepository();
+      final unsyncedAudits = await auditRepo.getUnsynced();
+      
+      if (unsyncedAudits.isEmpty) {
+        developer.log('No unsynced audit records to sync', name: 'DataService');
+        return DataResponse(
+          success: true,
+          data: {'synced': 0},
+          message: 'No audit records to sync',
+        );
+      }
+      
+      developer.log('Found ${unsyncedAudits.length} unsynced audit records', name: 'DataService');
+      
+      // Prepare FormData for each audit record
+      int syncedCount = 0;
+      List<Map<String, dynamic>> errors = [];
+      
+      for (var audit in unsyncedAudits) {
+        try {
+          final formData = FormData.fromMap({
+            'household_name': audit.householdName ?? '',
+            'national_id': audit.nationalId ?? '',
+            'phone_number': audit.phoneNumber ?? '',
+            'visit_date': audit.visitDate ?? '',
+            'females_below_18': audit.femalesBelow18 ?? 0,
+            'females_above_18': audit.femalesAbove18 ?? 0,
+            'males_below_18': audit.malesBelow18 ?? 0,
+            'males_above_18': audit.malesAbove18 ?? 0,
+            'has_cookstove_observe': audit.hasCookstoveObserve ?? '',
+            'cooking_method_before': audit.cookingMethodBefore ?? '',
+            'fuel_used_before': audit.fuelUsedBefore ?? '',
+            'other_cooking_device_before': audit.otherCookingDeviceBefore ?? '',
+            'payment_requested': audit.paymentRequested ?? '',
+            'payment_requested_by': audit.paymentRequestedBy ?? '',
+            'training_before_receiving': audit.trainingBeforeReceiving ?? '',
+            'where_trained': audit.whereTrained ?? '',
+            'date_of_cookstove_recieved': audit.dateOfCookstoveRecieved ?? '',
+            'where_received': audit.whereReceived ?? '',
+            'read_conset': audit.readConset ?? '',
+            'sign_consent': audit.signConsent ?? '',
+            'delivered_condition': audit.deliveredCondition ?? '',
+            'latitude': audit.latitude ?? '',
+            'longitude': audit.longitude ?? '',
+            'cook_stove_img': audit.photoPathCookStove ?? '',
+            'cook_stove_area_img': audit.photoPathCookStoveArea ?? '',
+            'status': audit.status ?? 'active',
+          });
+          
+          final response = await _dioClient.post(
+            ApiConstants.auditSync,
+            data: formData,
+          );
+          
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            // Mark as synced in local database
+            if (audit.auditId != null) {
+              await auditRepo.markAsSynced(audit.auditId!);
+              syncedCount++;
+              developer.log('Synced audit record ${audit.auditId}', name: 'DataService');
+            }
+          }
+        } catch (e) {
+          developer.log('Error syncing audit ${audit.auditId}: $e', name: 'DataService');
+          errors.add({
+            'audit_id': audit.auditId,
+            'error': e.toString(),
+          });
+        }
+      }
+      
+      developer.log('Successfully synced $syncedCount audit records', name: 'DataService');
+      
+      return DataResponse(
+        success: true,
+        data: {
+          'synced': syncedCount,
+          'errors': errors,
+        },
+        message: 'Successfully synced $syncedCount audit records',
+      );
+    } on DioException catch (e) {
+      developer.log('Error syncing audit: ${e.message}', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: e.response?.data['message'] ?? e.message ?? 'Failed to sync audit',
+      );
+    } catch (e) {
+      developer.log('Unexpected error syncing audit: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'An unexpected error occurred: $e',
+      );
+    }
+  }
+
+  /// Fetch all monitoring records by iterating through all pages and store in local database
+  Future<DataResponse<List<Map<String, dynamic>>>> getAllMonitoringPaginated({
+    int limit = 50,
+    Function(int currentRecords, int totalRecords)? onProgress,
+    bool storeInDatabase = true,
+  }) async {
+    try {
+      developer.log('Starting to fetch all monitoring records with pagination', name: 'DataService');
+      
+      List<Map<String, dynamic>> allMonitoring = [];
+      int currentPage = 1;
+      int totalPages = 1;
+      int totalRecords = 0;
+      
+      // STEP 1: If storing in database, backup unsynced local records
+      List<Monitoring> unsyncedBackup = [];
+      if (storeInDatabase) {
+        final monitoringRepo = MonitoringRepository();
+        unsyncedBackup = await monitoringRepo.getUnsynced();
+        developer.log('Backed up ${unsyncedBackup.length} unsynced local records before sync', name: 'DataService');
+      }
+      
+      do {
+        final response = await getMonitoringListPaginated(page: currentPage, limit: limit);
+        
+        if (!response.success || response.data == null) {
+          return DataResponse(
+            success: false,
+            message: response.message ?? 'Failed to fetch monitoring records',
+          );
+        }
+        
+        final paginatedData = response.data!;
+        allMonitoring.addAll(paginatedData.data);
+        totalPages = paginatedData.totalPages;
+        totalRecords = paginatedData.totalRecords;
+        
+        // Call progress callback with cumulative records downloaded and total records
+        onProgress?.call(allMonitoring.length, totalRecords);
+        
+        developer.log(
+          'Fetched page $currentPage/$totalPages (${paginatedData.data.length} items)',
+          name: 'DataService',
+        );
+        
+        currentPage++;
+      } while (currentPage <= totalPages);
+      
+      developer.log(
+        'Successfully fetched all ${allMonitoring.length} monitoring records from $totalPages pages',
+        name: 'DataService',
+      );
+      
+      // Store in local database if requested
+      if (storeInDatabase && allMonitoring.isNotEmpty) {
+        try {
+          final monitoringRepo = MonitoringRepository();
+          
+          // Convert to Monitoring objects and mark all as synced since they come from server
+          List<Monitoring> monitoringToInsert = [];
+          int skippedCount = 0;
+          
+          for (var i = 0; i < allMonitoring.length; i++) {
+            final monitoringData = allMonitoring[i];
+            try {
+              final monitoring = Monitoring.fromJson(monitoringData);
+              final monitoringWithSyncStatus = monitoring.copyWith(sIsSync: 1);
+              monitoringToInsert.add(monitoringWithSyncStatus);
+            } catch (e, stackTrace) {
+              developer.log('Error parsing monitoring record $i: $e', name: 'DataService');
+              developer.log('Stack trace: $stackTrace', name: 'DataService');
+              developer.log('Problematic data: $monitoringData', name: 'DataService');
+              skippedCount++;
+              // Continue with next record - don't let one bad record stop the entire sync
+            }
+          }
+          
+          developer.log('========================================', name: 'DataService');
+          developer.log('Monitoring Parsing Summary:', name: 'DataService');
+          developer.log('Total fetched: ${allMonitoring.length}', name: 'DataService');
+          developer.log('Successfully parsed: ${monitoringToInsert.length}', name: 'DataService');
+          developer.log('Skipped/Failed: $skippedCount', name: 'DataService');
+          developer.log('========================================', name: 'DataService');
+          
+          // Use bulk insert for better performance and reliability
+          if (monitoringToInsert.isNotEmpty) {
+            await monitoringRepo.insertBulk(monitoringToInsert);
+            developer.log('Stored ${monitoringToInsert.length} monitoring records in local database (marked as synced)', name: 'DataService');
+          } else {
+            developer.log('WARNING: No monitoring records to insert after parsing!', name: 'DataService');
+          }
+          
+          // STEP 2: Verify unsynced records are still there
+          final unsyncedCountAfter = await monitoringRepo.getUnsyncedCount();
+          developer.log('After sync: $unsyncedCountAfter unsynced local records', name: 'DataService');
+          
+          if (unsyncedCountAfter < unsyncedBackup.length) {
+            developer.log('WARNING: Some local records were lost! Restoring...', name: 'DataService');
+            // Restore lost records
+            await monitoringRepo.insertBulk(unsyncedBackup);
+            developer.log('Restored ${unsyncedBackup.length} local records', name: 'DataService');
+          } else {
+            developer.log('✅ All local unsynced records preserved', name: 'DataService');
+          }
+        } catch (e, stackTrace) {
+          developer.log('Error storing monitoring records in database: $e', name: 'DataService');
+          developer.log('Stack trace: $stackTrace', name: 'DataService');
+          // Don't fail the entire operation if database storage fails
+        }
+      }
+      
+      return DataResponse(
+        success: true,
+        data: allMonitoring,
+        message: 'All monitoring records fetched successfully',
+      );
+    } catch (e) {
+      developer.log('Error fetching all monitoring records: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to fetch all monitoring records: $e',
+      );
+    }
+  }
+
+  /// Sync updated monitoring records from server and store in local database
+  /// This method is used for incremental sync after initial full sync
+  Future<DataResponse<int>> syncUpdatedMonitoring(String lastSyncDate) async {
+    try {
+      developer.log('Starting incremental sync for monitoring records...', name: 'DataService');
+      
+      final response = await getUpdatedMonitoring(lastSyncDate);
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch updated monitoring records',
+        );
+      }
+      
+      final monitoringRecords = response.data!;
+      
+      if (monitoringRecords.isNotEmpty) {
+        final monitoringRepo = MonitoringRepository();
+        
+        // Mark all as synced since they come from server
+        final monitoringWithSyncStatus = monitoringRecords.map((monitoring) => 
+          monitoring.copyWith(sIsSync: 1)
+        ).toList();
+        
+        for (var monitoring in monitoringWithSyncStatus) {
+          await monitoringRepo.insert(monitoring);
+        }
+        
+        developer.log('Successfully synced ${monitoringRecords.length} updated monitoring records', name: 'DataService');
+      } else {
+        developer.log('No updated monitoring records found', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: monitoringRecords.length,
+        message: monitoringRecords.isEmpty 
+            ? 'No new updates available' 
+            : 'Successfully synced ${monitoringRecords.length} updated monitoring records',
+      );
+    } catch (e) {
+      developer.log('Error syncing updated monitoring records: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync updated monitoring records: $e',
+      );
+    }
+  }
+
+  /// Fetch all audit records by iterating through all pages and store in local database
+  Future<DataResponse<List<Map<String, dynamic>>>> getAllAuditsPaginated({
+    int limit = 50,
+    Function(int currentRecords, int totalRecords)? onProgress,
+    bool storeInDatabase = true,
+  }) async {
+    try {
+      developer.log('Starting to fetch all audit records with pagination', name: 'DataService');
+      
+      List<Map<String, dynamic>> allAudits = [];
+      int currentPage = 1;
+      int totalPages = 1;
+      int totalRecords = 0;
+      
+      // STEP 1: If storing in database, backup unsynced local records
+      List<Audit> unsyncedBackup = [];
+      if (storeInDatabase) {
+        final auditRepo = AuditRepository();
+        unsyncedBackup = await auditRepo.getUnsynced();
+        developer.log('Backed up ${unsyncedBackup.length} unsynced local records before sync', name: 'DataService');
+      }
+      
+      do {
+        final response = await getAuditListPaginated(page: currentPage, limit: limit);
+        
+        if (!response.success || response.data == null) {
+          return DataResponse(
+            success: false,
+            message: response.message ?? 'Failed to fetch audit records',
+          );
+        }
+        
+        final paginatedData = response.data!;
+        allAudits.addAll(paginatedData.data);
+        totalPages = paginatedData.totalPages;
+        totalRecords = paginatedData.totalRecords;
+        
+        // Call progress callback with cumulative records downloaded and total records
+        onProgress?.call(allAudits.length, totalRecords);
+        
+        developer.log(
+          'Fetched page $currentPage/$totalPages (${paginatedData.data.length} items)',
+          name: 'DataService',
+        );
+        
+        currentPage++;
+      } while (currentPage <= totalPages);
+      
+      developer.log(
+        'Successfully fetched all ${allAudits.length} audit records from $totalPages pages',
+        name: 'DataService',
+      );
+      
+      // Store in local database if requested
+      if (storeInDatabase && allAudits.isNotEmpty) {
+        try {
+          final auditRepo = AuditRepository();
+          
+          // Convert to Audit objects and mark all as synced since they come from server
+          List<Audit> auditsToInsert = [];
+          int skippedCount = 0;
+          
+          for (var i = 0; i < allAudits.length; i++) {
+            final auditData = allAudits[i];
+            try {
+              final audit = Audit.fromJson(auditData);
+              final auditWithSyncStatus = audit.copyWith(sIsSync: 1);
+              auditsToInsert.add(auditWithSyncStatus);
+            } catch (e, stackTrace) {
+              developer.log('Error parsing audit record $i: $e', name: 'DataService');
+              developer.log('Stack trace: $stackTrace', name: 'DataService');
+              developer.log('Problematic data: $auditData', name: 'DataService');
+              skippedCount++;
+              // Continue with next record - don't let one bad record stop the entire sync
+            }
+          }
+          
+          developer.log('========================================', name: 'DataService');
+          developer.log('Audit Parsing Summary:', name: 'DataService');
+          developer.log('Total fetched: ${allAudits.length}', name: 'DataService');
+          developer.log('Successfully parsed: ${auditsToInsert.length}', name: 'DataService');
+          developer.log('Skipped/Failed: $skippedCount', name: 'DataService');
+          developer.log('========================================', name: 'DataService');
+          
+          // Use bulk insert for better performance and reliability
+          if (auditsToInsert.isNotEmpty) {
+            await auditRepo.insertBulk(auditsToInsert);
+            developer.log('Stored ${auditsToInsert.length} audit records in local database (marked as synced)', name: 'DataService');
+          } else {
+            developer.log('WARNING: No audit records to insert after parsing!', name: 'DataService');
+          }
+          
+          // STEP 2: Verify unsynced records are still there
+          final unsyncedCountAfter = await auditRepo.getUnsyncedCount();
+          developer.log('After sync: $unsyncedCountAfter unsynced local records', name: 'DataService');
+          
+          if (unsyncedCountAfter < unsyncedBackup.length) {
+            developer.log('WARNING: Some local records were lost! Restoring...', name: 'DataService');
+            // Restore lost records
+            await auditRepo.insertBulk(unsyncedBackup);
+            developer.log('Restored ${unsyncedBackup.length} local records', name: 'DataService');
+          } else {
+            developer.log('✅ All local unsynced records preserved', name: 'DataService');
+          }
+        } catch (e, stackTrace) {
+          developer.log('Error storing audit records in database: $e', name: 'DataService');
+          developer.log('Stack trace: $stackTrace', name: 'DataService');
+          // Don't fail the entire operation if database storage fails
+        }
+      }
+      
+      return DataResponse(
+        success: true,
+        data: allAudits,
+        message: 'All audit records fetched successfully',
+      );
+    } catch (e) {
+      developer.log('Error fetching all audit records: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to fetch all audit records: $e',
+      );
+    }
+  }
+
+  /// Sync updated audit records from server and store in local database
+  /// This method is used for incremental sync after initial full sync
+  Future<DataResponse<int>> syncUpdatedAudits(String lastSyncDate) async {
+    try {
+      developer.log('Starting incremental sync for audit records...', name: 'DataService');
+      
+      final response = await getUpdatedAudits(lastSyncDate);
+      
+      if (!response.success || response.data == null) {
+        return DataResponse(
+          success: false,
+          message: response.message ?? 'Failed to fetch updated audit records',
+        );
+      }
+      
+      final auditRecords = response.data!;
+      
+      if (auditRecords.isNotEmpty) {
+        final auditRepo = AuditRepository();
+        
+        // Mark all as synced since they come from server
+        final auditsWithSyncStatus = auditRecords.map((audit) => 
+          audit.copyWith(sIsSync: 1)
+        ).toList();
+        
+        for (var audit in auditsWithSyncStatus) {
+          await auditRepo.insert(audit);
+        }
+        
+        developer.log('Successfully synced ${auditRecords.length} updated audit records', name: 'DataService');
+      } else {
+        developer.log('No updated audit records found', name: 'DataService');
+      }
+      
+      return DataResponse(
+        success: true,
+        data: auditRecords.length,
+        message: auditRecords.isEmpty 
+            ? 'No new updates available' 
+            : 'Successfully synced ${auditRecords.length} updated audit records',
+      );
+    } catch (e) {
+      developer.log('Error syncing updated audit records: $e', name: 'DataService');
+      return DataResponse(
+        success: false,
+        message: 'Failed to sync updated audit records: $e',
       );
     }
   }

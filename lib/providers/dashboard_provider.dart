@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/repositories/training_repository.dart';
+import 'package:irise/data/repositories/monitoring_repository.dart';
+import 'package:irise/data/repositories/audit_repository.dart';
 import 'package:irise/data/services/data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:developer' as developer;
@@ -10,6 +12,8 @@ class DashboardProvider extends ChangeNotifier {
   final TrainingSiteRepository _trainingSiteRepository = TrainingSiteRepository();
   final BeneficiaryRepository _beneficiaryRepository = BeneficiaryRepository();
   final TrainingRepository _trainingRepository = TrainingRepository();
+  final MonitoringRepository _monitoringRepository = MonitoringRepository();
+  final AuditRepository _auditRepository = AuditRepository();
   final DataService _dataService = DataService();
 
   // Counts
@@ -19,6 +23,10 @@ class DashboardProvider extends ChangeNotifier {
   int _unsyncedBeneficiaries = 0;
   int _totalTrainings = 0;
   int _unsyncedTrainings = 0;
+  int _totalMonitoring = 0;
+  int _unsyncedMonitoring = 0;
+  int _totalAudit = 0;
+  int _unsyncedAudit = 0;
 
   // Last sync timestamps
   DateTime? _lastTrainingSiteSync;
@@ -36,6 +44,10 @@ class DashboardProvider extends ChangeNotifier {
   int get unsyncedBeneficiaries => _unsyncedBeneficiaries;
   int get totalTrainings => _totalTrainings;
   int get unsyncedTrainings => _unsyncedTrainings;
+  int get totalMonitoring => _totalMonitoring;
+  int get unsyncedMonitoring => _unsyncedMonitoring;
+  int get totalAudit => _totalAudit;
+  int get unsyncedAudit => _unsyncedAudit;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
 
@@ -44,12 +56,6 @@ class DashboardProvider extends ChangeNotifier {
   DateTime? get lastBeneficiarySync => _lastBeneficiarySync;
   DateTime? get lastMonitoringSync => _lastMonitoringSync;
   DateTime? get lastAuditSync => _lastAuditSync;
-
-  // For monitoring and audit (placeholder values since we don't have these tables yet)
-  int get totalMonitoring => 233;
-  int get unsyncedMonitoring => 22;
-  int get totalAudit => 289;
-  int get unsyncedAudit => 55;
 
   Future<void> loadDashboardData() async {
     _isLoading = true;
@@ -64,6 +70,10 @@ class DashboardProvider extends ChangeNotifier {
         _beneficiaryRepository.getUnsyncedCount(),  // OFFLINE SAVED = unsynced records
         _trainingRepository.getCount(),
         _trainingRepository.getUnsyncedCount(),
+        _monitoringRepository.getSyncedCount(),
+        _monitoringRepository.getUnsyncedCount(),
+        _auditRepository.getSyncedCount(),
+        _auditRepository.getUnsyncedCount(),
       ]);
 
       // Load sync times separately
@@ -75,6 +85,10 @@ class DashboardProvider extends ChangeNotifier {
       _unsyncedBeneficiaries = results[3];
       _totalTrainings = results[4];
       _unsyncedTrainings = results[5];
+      _totalMonitoring = results[6];
+      _unsyncedMonitoring = results[7];
+      _totalAudit = results[8];
+      _unsyncedAudit = results[9];
 
       // IMPORTANT: Sync districts and authorities to local database on dashboard load
       // This ensures reference data is available for forms
@@ -85,6 +99,8 @@ class DashboardProvider extends ChangeNotifier {
       developer.log('Training Sites - Total (Synced): $_totalTrainingSites, Unsynced: $_unsyncedTrainingSites', name: 'DashboardProvider');
       developer.log('Beneficiaries - Total: $_totalBeneficiaries, Unsynced: $_unsyncedBeneficiaries', name: 'DashboardProvider');
       developer.log('Trainings - Total: $_totalTrainings, Unsynced: $_unsyncedTrainings', name: 'DashboardProvider');
+      developer.log('Monitoring - Total: $_totalMonitoring, Unsynced: $_unsyncedMonitoring', name: 'DashboardProvider');
+      developer.log('Audit - Total: $_totalAudit, Unsynced: $_unsyncedAudit', name: 'DashboardProvider');
       developer.log('Last Training Site Sync: $_lastTrainingSiteSync', name: 'DashboardProvider');
     } catch (e) {
       // Handle error - could show a snackbar or log
@@ -624,27 +640,123 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      developer.log('Starting monitoring sync...', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('STARTING MONITORING SYNC', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
       
-      // TODO: Implement monitoring sync when API is available
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API call
+      onProgress?.call('Starting monitoring sync...', 0, 0);
       
-      // Save sync timestamp for placeholder
-      await _saveLastSyncTime('monitoring', DateTime.now());
+      // Check if this is initial sync or incremental sync
+      final isInitialSync = _lastMonitoringSync == null;
       
-      // Refresh dashboard data
-      await loadDashboardData();
-      
-      return SyncResult(
-        success: true,
-        recordsProcessed: 0,
-        message: 'Monitoring sync not yet implemented',
-      );
+      if (isInitialSync) {
+        developer.log('Performing INITIAL FULL SYNC using pagination', name: 'DashboardProvider');
+        
+        // Fetch all monitoring records from server using pagination
+        final response = await _dataService.getAllMonitoringPaginated(
+          limit: 50,
+          onProgress: (currentRecords, totalRecords) {
+            // Report progress with actual record counts
+            onProgress?.call('Downloading records...', currentRecords, totalRecords);
+          },
+          storeInDatabase: true,
+        );
+        
+        if (response.success && response.data != null) {
+          final recordsProcessed = response.data!.length;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL MONITORING SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed monitoring records', name: 'DashboardProvider');
+          
+          // Save sync time
+          await _saveLastSyncTime('monitoring', DateTime.now());
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Monitoring sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed monitoring records'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL MONITORING SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync monitoring records',
+          );
+        }
+      } else {
+        developer.log('Performing INCREMENTAL SYNC using monitoring_data endpoint', name: 'DashboardProvider');
+        
+        // Capture the current time BEFORE making the API call
+        final newSyncTime = DateTime.now();
+        
+        // Format last sync date for API in ISO 8601 format (UTC)
+        final lastSyncDate = _lastMonitoringSync!.toUtc().toIso8601String();
+        
+        developer.log('Last sync date (ISO 8601): $lastSyncDate', name: 'DashboardProvider');
+        developer.log('New sync time will be: ${newSyncTime.toUtc().toIso8601String()}', name: 'DashboardProvider');
+        
+        onProgress?.call('Checking for updates since $lastSyncDate...', 0, 0);
+        
+        // Use incremental sync endpoint
+        final response = await _dataService.syncUpdatedMonitoring(lastSyncDate);
+        
+        if (response.success) {
+          final recordsProcessed = response.data ?? 0;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL MONITORING SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed updated monitoring records', name: 'DashboardProvider');
+          
+          // Save the sync time that was captured BEFORE the API call
+          await _saveLastSyncTime('monitoring', newSyncTime);
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Monitoring sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed updated monitoring records'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL MONITORING SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync updated monitoring records',
+          );
+        }
+      }
     } catch (e) {
-      developer.log('Error syncing monitoring: $e', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('MONITORING SYNC EXCEPTION', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('Error: $e', name: 'DashboardProvider');
+      
       return SyncResult(
         success: false,
-        message: 'Error syncing monitoring: $e',
+        message: 'Error syncing monitoring records: $e',
       );
     } finally {
       _isSyncing = false;
@@ -660,27 +772,123 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      developer.log('Starting audit sync...', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('STARTING AUDIT SYNC', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
       
-      // TODO: Implement audit sync when API is available
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API call
+      onProgress?.call('Starting audit sync...', 0, 0);
       
-      // Save sync timestamp for placeholder
-      await _saveLastSyncTime('audit', DateTime.now());
+      // Check if this is initial sync or incremental sync
+      final isInitialSync = _lastAuditSync == null;
       
-      // Refresh dashboard data
-      await loadDashboardData();
-      
-      return SyncResult(
-        success: true,
-        recordsProcessed: 0,
-        message: 'Audit sync not yet implemented',
-      );
+      if (isInitialSync) {
+        developer.log('Performing INITIAL FULL SYNC using pagination', name: 'DashboardProvider');
+        
+        // Fetch all audit records from server using pagination
+        final response = await _dataService.getAllAuditsPaginated(
+          limit: 50,
+          onProgress: (currentRecords, totalRecords) {
+            // Report progress with actual record counts
+            onProgress?.call('Downloading records...', currentRecords, totalRecords);
+          },
+          storeInDatabase: true,
+        );
+        
+        if (response.success && response.data != null) {
+          final recordsProcessed = response.data!.length;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL AUDIT SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed audit records', name: 'DashboardProvider');
+          
+          // Save sync time
+          await _saveLastSyncTime('audit', DateTime.now());
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Audit sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed audit records'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INITIAL AUDIT SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync audit records',
+          );
+        }
+      } else {
+        developer.log('Performing INCREMENTAL SYNC using audit_data endpoint', name: 'DashboardProvider');
+        
+        // Capture the current time BEFORE making the API call
+        final newSyncTime = DateTime.now();
+        
+        // Format last sync date for API in ISO 8601 format (UTC)
+        final lastSyncDate = _lastAuditSync!.toUtc().toIso8601String();
+        
+        developer.log('Last sync date (ISO 8601): $lastSyncDate', name: 'DashboardProvider');
+        developer.log('New sync time will be: ${newSyncTime.toUtc().toIso8601String()}', name: 'DashboardProvider');
+        
+        onProgress?.call('Checking for updates since $lastSyncDate...', 0, 0);
+        
+        // Use incremental sync endpoint
+        final response = await _dataService.syncUpdatedAudits(lastSyncDate);
+        
+        if (response.success) {
+          final recordsProcessed = response.data ?? 0;
+          
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL AUDIT SYNC COMPLETED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('✅ Successfully synced $recordsProcessed updated audit records', name: 'DashboardProvider');
+          
+          // Save the sync time that was captured BEFORE the API call
+          await _saveLastSyncTime('audit', newSyncTime);
+          
+          // Refresh dashboard data
+          await loadDashboardData();
+          
+          onProgress?.call('Audit sync completed', recordsProcessed, recordsProcessed);
+          
+          return SyncResult(
+            success: true,
+            recordsProcessed: recordsProcessed,
+            message: recordsProcessed > 0 
+                ? 'Successfully synced $recordsProcessed updated audit records'
+                : 'All data is up to date',
+          );
+        } else {
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('INCREMENTAL AUDIT SYNC FAILED', name: 'DashboardProvider');
+          developer.log('========================================', name: 'DashboardProvider');
+          developer.log('Error: ${response.message}', name: 'DashboardProvider');
+          
+          return SyncResult(
+            success: false,
+            message: response.message ?? 'Failed to sync updated audit records',
+          );
+        }
+      }
     } catch (e) {
-      developer.log('Error syncing audit: $e', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('AUDIT SYNC EXCEPTION', name: 'DashboardProvider');
+      developer.log('========================================', name: 'DashboardProvider');
+      developer.log('Error: $e', name: 'DashboardProvider');
+      
       return SyncResult(
         success: false,
-        message: 'Error syncing audit: $e',
+        message: 'Error syncing audit records: $e',
       );
     } finally {
       _isSyncing = false;

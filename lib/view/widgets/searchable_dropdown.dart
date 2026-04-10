@@ -64,8 +64,11 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                       ? Colors.black87
                       : Colors.black38,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             widget.isLoading
                 ? const SizedBox(
                     width: 16,
@@ -132,8 +135,11 @@ class _SearchableDropdownDialogState<T>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final bottomSheetHeight = screenHeight * 0.6;
+    
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
+      height: bottomSheetHeight,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.only(
@@ -156,8 +162,11 @@ class _SearchableDropdownDialogState<T>
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: const Icon(Icons.close, color: Colors.black54),
@@ -187,6 +196,7 @@ class _SearchableDropdownDialogState<T>
                   horizontal: 16,
                   vertical: 12,
                 ),
+                isDense: true,
               ),
             ),
           ),
@@ -228,6 +238,8 @@ class _SearchableDropdownDialogState<T>
                               fontSize: 14,
                               color: Colors.black87,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       );
