@@ -126,17 +126,26 @@ class _TrainingPointIdentificationScreenState
       setState(() {
         _selectedDistrict = district;
       });
-    }
-    
-    // Find and set authority
-    if (site.traditionalAuthority != null && _authorities.isNotEmpty) {
-      final authority = _authorities.firstWhere(
-        (a) => a.authorityName == site.traditionalAuthority,
-        orElse: () => _authorities.first,
-      );
-      setState(() {
-        _selectedAuthority = authority;
-      });
+      
+      // Find and set authority (only from authorities linked to the selected district)
+      if (site.traditionalAuthority != null && _authorities.isNotEmpty && _selectedDistrict != null) {
+        // Filter authorities by district first
+        final filteredAuthorities = _authorities.where(
+          (a) => a.districtId == _selectedDistrict!.id
+        ).toList();
+        
+        // Then find the matching authority
+        try {
+          final authority = filteredAuthorities.firstWhere(
+            (a) => a.authorityName == site.traditionalAuthority,
+          );
+          setState(() {
+            _selectedAuthority = authority;
+          });
+        } catch (e) {
+          developer.log('Authority not found for district: ${site.traditionalAuthority}', name: 'TrainingPointIdentification');
+        }
+      }
     }
   }
 
@@ -222,7 +231,8 @@ class _TrainingPointIdentificationScreenState
   void _onDistrictChanged(District? district) {
     setState(() {
       _selectedDistrict = district;
-      // Don't clear authority selection since we're loading all authorities
+      // Clear authority selection when district changes
+      _selectedAuthority = null;
     });
   }
 
@@ -1134,16 +1144,27 @@ class _TrainingPointIdentificationScreenState
   }
 
   Widget _buildAuthorityDropdown() {
+    // Filter authorities based on selected district
+    final filteredAuthorities = _selectedDistrict != null
+        ? _authorities.where((authority) => authority.districtId == _selectedDistrict!.id).toList()
+        : _authorities;
+    
     return SearchableDropdown<Authority>(
       value: _selectedAuthority,
-      items: _authorities,
+      items: filteredAuthorities,
       itemLabel: (authority) => authority.authorityName ?? 'Unknown Authority',
       onChanged: (Authority? authority) {
         setState(() {
           _selectedAuthority = authority;
         });
       },
-      hint: _isLoadingAuthorities ? 'Loading authorities...' : 'Select Authority',
+      hint: _isLoadingAuthorities 
+          ? 'Loading authorities...' 
+          : _selectedDistrict == null
+              ? 'Select District first'
+              : filteredAuthorities.isEmpty
+                  ? 'No authorities for selected district'
+                  : 'Select Authority',
       isLoading: _isLoadingAuthorities,
     );
   }

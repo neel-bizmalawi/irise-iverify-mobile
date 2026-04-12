@@ -110,60 +110,107 @@ class _BeneficiaryRegistrationScreenState
 
   Future<void> _loadExistingBeneficiary() async {
     try {
-      final id = int.tryParse(widget.beneficiaryId!);
-      if (id != null) {
-        final beneficiary = await _beneficiaryRepo.getById(id);
-        if (beneficiary != null) {
-          setState(() {
-            _existingBeneficiary = beneficiary;
-            _isEditMode = true;
-
-            // Populate form fields
-            _selectedTrainingSite = beneficiary.trainingSite;
-            _firstNameController.text = beneficiary.firstName ?? '';
-            _lastNameController.text = beneficiary.lastName ?? '';
-            _mobileController.text = beneficiary.mobileNo ?? '';
-            _nationalIdController.text = beneficiary.nationalId ?? '';
-            _femalesBelow18Controller.text =
-                beneficiary.femalesBelow18?.toString() ?? '';
-            _femalesAbove18Controller.text =
-                beneficiary.femalesAbove18?.toString() ?? '';
-            _malesBelow18Controller.text =
-                beneficiary.malesBelow18?.toString() ?? '';
-            _malesAbove18Controller.text =
-                beneficiary.malesAbove18?.toString() ?? '';
-            _selectedCookingMethod = beneficiary.cookingMethod;
-            _selectedLanguage = beneficiary.language ?? 'English';
-            _readDoc = beneficiary.readDoc?.toLowerCase() == 'yes';
-            _readToYou = beneficiary.readToYou?.toLowerCase() == 'yes';
-            _understoodDoc = beneficiary.understoodDoc?.toLowerCase() == 'yes';
-            _hasOtherCookstove = beneficiary.otherCookstove?.toLowerCase() == 'yes';
-
-            // Load images
-            if (beneficiary.nationalIdAttachment != null) {
-              // Check if it's a server path (starts with /uploads/) or local file path
-              if (beneficiary.nationalIdAttachment!.startsWith('/uploads/')) {
-                // Server path - don't load as File, will display using network image
-                _nationalIdImage = null;
-              } else if (File(beneficiary.nationalIdAttachment!).existsSync()) {
-                // Local file path
-                _nationalIdImage = File(beneficiary.nationalIdAttachment!);
-              }
-              _nationalIdTimestamp = beneficiary.nationalIdTimestamp;
-            }
-            if (beneficiary.signature != null) {
-              // Check if it's a server path (starts with /uploads/) or local file path
-              if (beneficiary.signature!.startsWith('/uploads/')) {
-                // Server path - don't load as File, will display using network image
-                _signatureImage = null;
-              } else if (File(beneficiary.signature!).existsSync()) {
-                // Local file path
-                _signatureImage = File(beneficiary.signature!);
-              }
-              _signatureTimestamp = beneficiary.signatureTimestamp;
-            }
-          });
+      developer.log('Loading beneficiary with ID: ${widget.beneficiaryId}', name: 'BeneficiaryRegistration');
+      
+      // Parse the beneficiaryId - it could be "b_123" (beneficiary_id) or "o_456" (offline_id)
+      // This prevents ID collision between beneficiary_id and offline_id
+      Beneficiary? beneficiary;
+      
+      if (widget.beneficiaryId!.startsWith('b_')) {
+        // Server beneficiary - use beneficiary_id
+        final beneficiaryId = int.tryParse(widget.beneficiaryId!.substring(2));
+        if (beneficiaryId != null) {
+          beneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
+          developer.log('Loaded by beneficiary_id: $beneficiaryId', name: 'BeneficiaryRegistration');
         }
+      } else if (widget.beneficiaryId!.startsWith('o_')) {
+        // Local beneficiary - use offline_id
+        final offlineId = int.tryParse(widget.beneficiaryId!.substring(2));
+        if (offlineId != null) {
+          beneficiary = await _beneficiaryRepo.getByOfflineId(offlineId);
+          developer.log('Loaded by offline_id: $offlineId', name: 'BeneficiaryRegistration');
+        }
+      } else {
+        // Fallback: try to parse as plain number (for backward compatibility)
+        final id = int.tryParse(widget.beneficiaryId!);
+        if (id != null) {
+          // Try beneficiary_id first, then offline_id
+          beneficiary = await _beneficiaryRepo.getByBeneficiaryId(id);
+          if (beneficiary == null) {
+            beneficiary = await _beneficiaryRepo.getByOfflineId(id);
+          }
+          developer.log('Loaded by fallback ID: $id', name: 'BeneficiaryRegistration');
+        }
+      }
+      
+      if (beneficiary != null) {
+        setState(() {
+          _existingBeneficiary = beneficiary;
+          _isEditMode = true;
+
+          // Populate form fields
+          _selectedTrainingSite = beneficiary!.trainingSite;
+          _firstNameController.text = beneficiary.firstName ?? '';
+          _lastNameController.text = beneficiary.lastName ?? '';
+          _mobileController.text = beneficiary.mobileNo ?? '';
+          _nationalIdController.text = beneficiary.nationalId ?? '';
+          _femalesBelow18Controller.text =
+              beneficiary.femalesBelow18?.toString() ?? '';
+          _femalesAbove18Controller.text =
+              beneficiary.femalesAbove18?.toString() ?? '';
+          _malesBelow18Controller.text =
+              beneficiary.malesBelow18?.toString() ?? '';
+          _malesAbove18Controller.text =
+              beneficiary.malesAbove18?.toString() ?? '';
+          _selectedCookingMethod = beneficiary.cookingMethod;
+          _selectedLanguage = beneficiary.language ?? 'English';
+          _readDoc = beneficiary.readDoc?.toLowerCase() == 'yes';
+          _readToYou = beneficiary.readToYou?.toLowerCase() == 'yes';
+          _understoodDoc = beneficiary.understoodDoc?.toLowerCase() == 'yes';
+          _hasOtherCookstove = beneficiary.otherCookstove?.toLowerCase() == 'yes';
+
+          // Load images - CRITICAL: Only load if paths exist and are not empty
+          // This prevents displaying images from other beneficiaries due to ID collision
+          if (beneficiary.nationalIdAttachment != null && beneficiary.nationalIdAttachment!.isNotEmpty) {
+            // Check if it's a server path (starts with /uploads/) or local file path
+            if (beneficiary.nationalIdAttachment!.startsWith('/uploads/')) {
+              // Server path - don't load as File, will display using network image
+              _nationalIdImage = null;
+            } else if (File(beneficiary.nationalIdAttachment!).existsSync()) {
+              // Local file path
+              _nationalIdImage = File(beneficiary.nationalIdAttachment!);
+            } else {
+              // Path exists but file doesn't - clear it
+              _nationalIdImage = null;
+              developer.log('National ID file not found: ${beneficiary.nationalIdAttachment}', name: 'BeneficiaryRegistration');
+            }
+            _nationalIdTimestamp = beneficiary.nationalIdTimestamp;
+          } else {
+            // No image path - ensure state is clear
+            _nationalIdImage = null;
+            _nationalIdTimestamp = null;
+          }
+          
+          if (beneficiary.signature != null && beneficiary.signature!.isNotEmpty) {
+            // Check if it's a server path (starts with /uploads/) or local file path
+            if (beneficiary.signature!.startsWith('/uploads/')) {
+              // Server path - don't load as File, will display using network image
+              _signatureImage = null;
+            } else if (File(beneficiary.signature!).existsSync()) {
+              // Local file path
+              _signatureImage = File(beneficiary.signature!);
+            } else {
+              // Path exists but file doesn't - clear it
+              _signatureImage = null;
+              developer.log('Signature file not found: ${beneficiary.signature}', name: 'BeneficiaryRegistration');
+            }
+            _signatureTimestamp = beneficiary.signatureTimestamp;
+          } else {
+            // No image path - ensure state is clear
+            _signatureImage = null;
+            _signatureTimestamp = null;
+          }
+        });
       }
     } catch (e) {
       developer.log('Error loading existing beneficiary: $e',
@@ -552,7 +599,15 @@ class _BeneficiaryRegistrationScreenState
               name: 'BeneficiaryRegistration');
           
           // Reload the complete beneficiary data from database for potential sync
-          final reloadedBeneficiary = await _beneficiaryRepo.getById(beneficiary.id!);
+          // CRITICAL: Use specific lookup methods to avoid ID collision
+          Beneficiary? reloadedBeneficiary;
+          
+          if (beneficiary.beneficiaryId != null) {
+            reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiary.beneficiaryId!);
+          } else if (beneficiary.offlineId != null) {
+            reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(beneficiary.offlineId!);
+          }
+          
           if (reloadedBeneficiary != null) {
             developer.log('Reloaded complete beneficiary data from database', name: 'BeneficiaryRegistration');
             developer.log('Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}', name: 'BeneficiaryRegistration');
@@ -704,11 +759,10 @@ class _BeneficiaryRegistrationScreenState
                           ),
                         ),
                       ),
-                      // FIX 1: replaced withValues(alpha:) → withOpacity()
                       Container(
                         width: 24,
                         height: 24,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
@@ -1382,7 +1436,7 @@ class _BeneficiaryRegistrationScreenState
             value: _hasOtherCookstove,
             onChanged: (value) => setState(() => _hasOtherCookstove = value),
             activeThumbColor: const Color(0xFF4CAF50),
-            activeTrackColor: const Color(0xFF4CAF50).withValues(alpha: 0.5),
+            activeTrackColor: const Color(0xFF4CAF50).withOpacity(0.5),
           ),
         ],
       ),
@@ -1518,7 +1572,7 @@ class _BeneficiaryRegistrationScreenState
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
+                        color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -1607,13 +1661,21 @@ class _BeneficiaryRegistrationScreenState
   }
   
   // Helper method to get image path based on title
+  // CRITICAL: Only return image path if it actually exists and is not empty
+  // This prevents displaying images from other beneficiaries due to ID collision
   String? _getImagePathForTitle(String title) {
     if (_existingBeneficiary == null) return null;
     
+    String? imagePath;
     if (title.contains('NATIONAL ID')) {
-      return _existingBeneficiary!.nationalIdAttachment;
+      imagePath = _existingBeneficiary!.nationalIdAttachment;
     } else if (title.contains('SIGNATURE')) {
-      return _existingBeneficiary!.signature;
+      imagePath = _existingBeneficiary!.signature;
+    }
+    
+    // Only return if path exists and is not empty
+    if (imagePath != null && imagePath.isNotEmpty) {
+      return imagePath;
     }
     return null;
   }

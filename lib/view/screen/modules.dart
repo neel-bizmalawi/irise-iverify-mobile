@@ -22,14 +22,14 @@ class ModulesScreen extends StatelessWidget {
       'title': 'House Hold Distribution',
       'icon': Icons.home_outlined,
     },
-    {
-      'title': 'Monitoring',
-      'icon': Icons.monitor_outlined,
-    },
-    {
-      'title': 'Audit Process',
-      'icon': Icons.people_outlined,
-    },
+    // {
+    //   'title': 'Monitoring',
+    //   'icon': Icons.monitor_outlined,
+    // },
+    // {
+    //   'title': 'Audit Process',
+    //   'icon': Icons.people_outlined,
+    // },
   ];
 
   @override

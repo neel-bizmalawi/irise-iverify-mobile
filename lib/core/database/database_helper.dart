@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 15;
+  static const int _databaseVersion = 16;
 
   DatabaseHelper._internal();
 
@@ -39,10 +39,10 @@ class DatabaseHelper {
   Future<void> _onCreate(Database db, int version) async {
     developer.log('Creating database tables...', name: 'DatabaseHelper');
 
-    // Create training_sites table with proper auto-increment id
+    // Create training_sites table with offline_id as auto-increment primary key
     await db.execute('''
       CREATE TABLE training_sites (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
         training_point_id INTEGER UNIQUE,
         is_parent TEXT DEFAULT 'no',
         m_training_point_id INTEGER,
@@ -67,15 +67,14 @@ class DatabaseHelper {
         created_date TEXT,
         modified_date TEXT,
         status TEXT DEFAULT 'active',
-        offline_id INTEGER UNIQUE,
         server_time TEXT
       )
     ''');
 
-    // Create beneficiaries table with complete schema
+    // Create beneficiaries table with offline_id as auto-increment primary key
     await db.execute('''
       CREATE TABLE beneficiaries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
         beneficiary_id INTEGER UNIQUE,
         training_site TEXT,
         m_user_id INTEGER,
@@ -118,7 +117,6 @@ class DatabaseHelper {
         modified_by INTEGER,
         status TEXT DEFAULT 'active',
         s_is_sync INTEGER DEFAULT 0,
-        offline_id INTEGER UNIQUE,
         server_time TEXT,
         distribution_date TEXT
       )
@@ -208,10 +206,11 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create monitoring_data table
+    // Create monitoring_data table with offline_id as auto-increment primary key
     await db.execute('''
       CREATE TABLE monitoring_data (
-        monitoring_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        monitoring_id INTEGER UNIQUE,
         user_id INTEGER,
         beneficiary_id INTEGER,
         national_id TEXT,
@@ -254,10 +253,11 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create audit table
+    // Create audit table with offline_id as auto-increment primary key
     await db.execute('''
       CREATE TABLE audit (
-        audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        audit_id INTEGER UNIQUE,
         household_name TEXT,
         national_id TEXT,
         phone_number TEXT,
@@ -1059,6 +1059,327 @@ class DatabaseHelper {
       }
       
       developer.log('Database migration to version 15 completed', name: 'DatabaseHelper');
+    }
+    
+    if (oldVersion < 16) {
+      // Migration from version 15 to 16: Make offline_id the primary key for all tables
+      developer.log('Migrating to version 16: Making offline_id the primary key', name: 'DatabaseHelper');
+      
+      try {
+        // ========== TRAINING_SITES TABLE ==========
+        developer.log('Migrating training_sites table...', name: 'DatabaseHelper');
+        
+        // Create new training_sites table with offline_id as primary key
+        await db.execute('''
+          CREATE TABLE training_sites_new (
+            offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            training_point_id INTEGER UNIQUE,
+            is_parent TEXT DEFAULT 'no',
+            m_training_point_id INTEGER,
+            training_site TEXT,
+            road_access TEXT DEFAULT 'no',
+            village_head_name TEXT,
+            gvh_name TEXT,
+            district TEXT,
+            traditional_authority TEXT,
+            total_people INTEGER,
+            house_holds_count INTEGER,
+            cookstoves_count INTEGER,
+            house_hold_radius INTEGER,
+            latitude REAL,
+            longitude REAL,
+            s_is_sync INTEGER DEFAULT 0,
+            training_status TEXT,
+            conduct_training_date TEXT,
+            number_of_people_present INTEGER,
+            created_by TEXT,
+            modified_by TEXT,
+            created_date TEXT,
+            modified_date TEXT,
+            status TEXT DEFAULT 'active',
+            server_time TEXT
+          )
+        ''');
+        
+        // Copy data from old table (offline_id will auto-increment if null)
+        await db.execute('''
+          INSERT INTO training_sites_new (
+            offline_id, training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status, conduct_training_date,
+            number_of_people_present, created_by, modified_by, created_date, modified_date,
+            status, server_time
+          )
+          SELECT 
+            offline_id, training_point_id, is_parent, m_training_point_id, training_site,
+            road_access, village_head_name, gvh_name, district, traditional_authority,
+            total_people, house_holds_count, cookstoves_count, house_hold_radius,
+            latitude, longitude, s_is_sync, training_status, conduct_training_date,
+            number_of_people_present, created_by, modified_by, created_date, modified_date,
+            status, server_time
+          FROM training_sites
+        ''');
+        
+        await db.execute('DROP TABLE training_sites');
+        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+        
+        developer.log('training_sites table migrated successfully', name: 'DatabaseHelper');
+        
+        // ========== BENEFICIARIES TABLE ==========
+        developer.log('Migrating beneficiaries table...', name: 'DatabaseHelper');
+        
+        // Create new beneficiaries table with offline_id as primary key
+        await db.execute('''
+          CREATE TABLE beneficiaries_new (
+            offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            beneficiary_id INTEGER UNIQUE,
+            training_site TEXT,
+            m_user_id INTEGER,
+            m_site_id INTEGER,
+            first_name TEXT,
+            last_name TEXT,
+            mobile_no TEXT,
+            other_cookstove TEXT DEFAULT 'no',
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            cooking_method TEXT,
+            district_name TEXT,
+            national_id TEXT UNIQUE,
+            national_id_attachment TEXT,
+            house_pic TEXT,
+            cookstove_pic TEXT,
+            signature TEXT,
+            emp_id INTEGER,
+            language TEXT DEFAULT 'english',
+            read_doc TEXT DEFAULT 'no',
+            understood_doc TEXT DEFAULT 'no',
+            emp_sign TEXT,
+            read_to_you TEXT DEFAULT 'no',
+            stove_status_delivery TEXT DEFAULT 'no',
+            no_other_cook_stove_present TEXT DEFAULT 'no',
+            primary_residence_confirmation TEXT DEFAULT 'no',
+            cookstove_pic_timestamp TEXT,
+            house_pic_timestamp TEXT,
+            national_id_timestamp TEXT,
+            signature_timestamp TEXT,
+            device_serial_no TEXT,
+            latitude REAL,
+            longitude REAL,
+            geo_address TEXT,
+            created_date TEXT,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            status TEXT DEFAULT 'active',
+            s_is_sync INTEGER DEFAULT 0,
+            server_time TEXT,
+            distribution_date TEXT
+          )
+        ''');
+        
+        // Copy data from old table
+        await db.execute('''
+          INSERT INTO beneficiaries_new (
+            offline_id, beneficiary_id, training_site, m_user_id, m_site_id,
+            first_name, last_name, mobile_no, other_cookstove,
+            females_below_18, females_above_18, males_below_18, males_above_18,
+            cooking_method, district_name, national_id, national_id_attachment,
+            house_pic, cookstove_pic, signature, emp_id, language,
+            read_doc, understood_doc, emp_sign, read_to_you,
+            stove_status_delivery, no_other_cook_stove_present, primary_residence_confirmation,
+            cookstove_pic_timestamp, house_pic_timestamp, national_id_timestamp, signature_timestamp,
+            device_serial_no, latitude, longitude, geo_address,
+            created_date, created_by, modified_date, modified_by,
+            status, s_is_sync, server_time, distribution_date
+          )
+          SELECT 
+            offline_id, beneficiary_id, training_site, m_user_id, m_site_id,
+            first_name, last_name, mobile_no, other_cookstove,
+            females_below_18, females_above_18, males_below_18, males_above_18,
+            cooking_method, district_name, national_id, national_id_attachment,
+            house_pic, cookstove_pic, signature, emp_id, language,
+            read_doc, understood_doc, emp_sign, read_to_you,
+            stove_status_delivery, no_other_cook_stove_present, primary_residence_confirmation,
+            cookstove_pic_timestamp, house_pic_timestamp, national_id_timestamp, signature_timestamp,
+            device_serial_no, latitude, longitude, geo_address,
+            created_date, created_by, modified_date, modified_by,
+            status, s_is_sync, server_time, distribution_date
+          FROM beneficiaries
+        ''');
+        
+        await db.execute('DROP TABLE beneficiaries');
+        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+        
+        developer.log('beneficiaries table migrated successfully', name: 'DatabaseHelper');
+        
+        // ========== MONITORING_DATA TABLE ==========
+        developer.log('Migrating monitoring_data table...', name: 'DatabaseHelper');
+        
+        // Create new monitoring_data table with offline_id as primary key
+        await db.execute('''
+          CREATE TABLE monitoring_data_new (
+            offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            monitoring_id INTEGER UNIQUE,
+            user_id INTEGER,
+            beneficiary_id INTEGER,
+            national_id TEXT,
+            agent_name TEXT,
+            visit_at TEXT,
+            old_gps_lat REAL,
+            old_gps_lng REAL,
+            new_gps_lat REAL,
+            new_gps_lng REAL,
+            device_serial_no TEXT,
+            new_device_serial_no TEXT,
+            hh_name_same TEXT,
+            stoves_present TEXT,
+            stove_being_used TEXT,
+            times_used_today INTEGER,
+            stove_condition TEXT,
+            photo_url TEXT,
+            nfc_tag_status TEXT,
+            user_satisfaction TEXT,
+            fuel_type TEXT,
+            daily_fuel_cost INTEGER,
+            savings_3_months INTEGER,
+            est_fuel_last3meals_kg INTEGER,
+            needs_training TEXT,
+            training_type TEXT,
+            training_performed TEXT,
+            training_not_done_reason TEXT,
+            needs_more_visits TEXT,
+            more_visits_reason TEXT,
+            health_hospital_less TEXT,
+            health_better_air TEXT,
+            photo_path TEXT,
+            s_is_sync INTEGER DEFAULT 0,
+            created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+          )
+        ''');
+        
+        // Copy data from old table (monitoring_id becomes offline_id)
+        await db.execute('''
+          INSERT INTO monitoring_data_new (
+            monitoring_id, user_id, beneficiary_id, national_id, agent_name, visit_at,
+            old_gps_lat, old_gps_lng, new_gps_lat, new_gps_lng,
+            device_serial_no, new_device_serial_no, hh_name_same, stoves_present,
+            stove_being_used, times_used_today, stove_condition, photo_url,
+            nfc_tag_status, user_satisfaction, fuel_type, daily_fuel_cost,
+            savings_3_months, est_fuel_last3meals_kg, needs_training, training_type,
+            training_performed, training_not_done_reason, needs_more_visits,
+            more_visits_reason, health_hospital_less, health_better_air, photo_path,
+            s_is_sync, created_date, created_by, modified_date, modified_by,
+            server_time, status
+          )
+          SELECT 
+            monitoring_id, user_id, beneficiary_id, national_id, agent_name, visit_at,
+            old_gps_lat, old_gps_lng, new_gps_lat, new_gps_lng,
+            device_serial_no, new_device_serial_no, hh_name_same, stoves_present,
+            stove_being_used, times_used_today, stove_condition, photo_url,
+            nfc_tag_status, user_satisfaction, fuel_type, daily_fuel_cost,
+            savings_3_months, est_fuel_last3meals_kg, needs_training, training_type,
+            training_performed, training_not_done_reason, needs_more_visits,
+            more_visits_reason, health_hospital_less, health_better_air, photo_path,
+            s_is_sync, created_date, created_by, modified_date, modified_by,
+            server_time, status
+          FROM monitoring_data
+        ''');
+        
+        await db.execute('DROP TABLE monitoring_data');
+        await db.execute('ALTER TABLE monitoring_data_new RENAME TO monitoring_data');
+        
+        developer.log('monitoring_data table migrated successfully', name: 'DatabaseHelper');
+        
+        // ========== AUDIT TABLE ==========
+        developer.log('Migrating audit table...', name: 'DatabaseHelper');
+        
+        // Create new audit table with offline_id as primary key
+        await db.execute('''
+          CREATE TABLE audit_new (
+            offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            audit_id INTEGER UNIQUE,
+            household_name TEXT,
+            national_id TEXT,
+            phone_number TEXT,
+            visit_date TEXT,
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            has_cookstove_observe TEXT,
+            cooking_method_before TEXT,
+            fuel_used_before TEXT,
+            other_cooking_device_before TEXT,
+            payment_requested TEXT,
+            payment_requested_by TEXT,
+            training_before_receiving TEXT,
+            read_conset TEXT,
+            sign_consent TEXT,
+            delivered_condition TEXT,
+            date_of_cookstove_recieved TEXT,
+            where_received TEXT,
+            where_trained TEXT,
+            latitude REAL,
+            longitude REAL,
+            photo_path_cook_stove TEXT,
+            photo_path_cook_stove_area TEXT,
+            remarks TEXT,
+            s_is_sync INTEGER DEFAULT 0,
+            created_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            server_time TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+          )
+        ''');
+        
+        // Copy data from old table (audit_id becomes offline_id)
+        await db.execute('''
+          INSERT INTO audit_new (
+            audit_id, household_name, national_id, phone_number, visit_date,
+            females_below_18, females_above_18, males_below_18, males_above_18,
+            has_cookstove_observe, cooking_method_before, fuel_used_before,
+            other_cooking_device_before, payment_requested, payment_requested_by,
+            training_before_receiving, read_conset, sign_consent, delivered_condition,
+            date_of_cookstove_recieved, where_received, where_trained,
+            latitude, longitude, photo_path_cook_stove, photo_path_cook_stove_area,
+            remarks, s_is_sync, created_date, created_by, modified_date, modified_by,
+            server_time, status
+          )
+          SELECT 
+            audit_id, household_name, national_id, phone_number, visit_date,
+            females_below_18, females_above_18, males_below_18, males_above_18,
+            has_cookstove_observe, cooking_method_before, fuel_used_before,
+            other_cooking_device_before, payment_requested, payment_requested_by,
+            training_before_receiving, read_conset, sign_consent, delivered_condition,
+            date_of_cookstove_recieved, where_received, where_trained,
+            latitude, longitude, photo_path_cook_stove, photo_path_cook_stove_area,
+            remarks, s_is_sync, created_date, created_by, modified_date, modified_by,
+            server_time, status
+          FROM audit
+        ''');
+        
+        await db.execute('DROP TABLE audit');
+        await db.execute('ALTER TABLE audit_new RENAME TO audit');
+        
+        developer.log('audit table migrated successfully', name: 'DatabaseHelper');
+        
+        developer.log('Successfully migrated all tables to use offline_id as primary key', name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 16 migration: $e', name: 'DatabaseHelper');
+        rethrow;
+      }
+      
+      developer.log('Database migration to version 16 completed', name: 'DatabaseHelper');
     }
   }
 

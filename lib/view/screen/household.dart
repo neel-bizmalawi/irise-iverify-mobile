@@ -272,18 +272,24 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         );
       }
       
-      // Reload complete beneficiary data from database using beneficiary_id or offline_id
-      // IMPORTANT: Use beneficiary_id if it exists, otherwise use offline_id
-      final lookupId = household.beneficiaryId ?? household.offlineId;
-      if (lookupId == null) {
+      // Reload complete beneficiary data from database
+      // CRITICAL: Use specific lookup methods to avoid ID collision
+      // If household has beneficiary_id, use getByBeneficiaryId
+      // If household only has offline_id, use getByOfflineId
+      Beneficiary? reloadedBeneficiary;
+      
+      if (household.beneficiaryId != null) {
+        developer.log('Reloading beneficiary for sync using beneficiary_id: ${household.beneficiaryId}', name: 'HouseholdScreen');
+        reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(household.beneficiaryId!);
+      } else if (household.offlineId != null) {
+        developer.log('Reloading beneficiary for sync using offline_id: ${household.offlineId}', name: 'HouseholdScreen');
+        reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(household.offlineId!);
+      } else {
         throw Exception('Beneficiary has no beneficiary_id or offline_id');
       }
       
-      developer.log('Reloading beneficiary for sync using ID: $lookupId (beneficiary_id: ${household.beneficiaryId}, offline_id: ${household.offlineId})', name: 'HouseholdScreen');
-      
-      final reloadedBeneficiary = await _beneficiaryRepo.getById(lookupId);
       if (reloadedBeneficiary == null) {
-        throw Exception('Failed to reload beneficiary data for ID: $lookupId');
+        throw Exception('Failed to reload beneficiary data');
       }
       
       developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'HouseholdScreen');
@@ -627,7 +633,17 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                                 final name = '${household.firstName ?? ''} ${household.lastName ?? ''}'.trim();
                                 final nationalId = household.nationalId ?? 'N/A';
                                 final isSynced = household.sIsSync == 1;
-                                final householdId = household.beneficiaryId?.toString() ?? household.offlineId?.toString() ?? nationalId;
+                                
+                                // CRITICAL FIX: Use prefixed IDs to prevent collision between beneficiary_id and offline_id
+                                // Format: "b_123" for beneficiary_id, "o_456" for offline_id
+                                final String householdId;
+                                if (household.beneficiaryId != null) {
+                                  householdId = 'b_${household.beneficiaryId}';
+                                } else if (household.offlineId != null) {
+                                  householdId = 'o_${household.offlineId}';
+                                } else {
+                                  householdId = nationalId; // Fallback
+                                }
                                 
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
@@ -708,7 +724,6 @@ class _HouseholdTile extends StatelessWidget {
   Widget build(BuildContext context) {
     // Check for missing household data - only fields from EditHouseholdScreen
     final List<String> missing = [];
-    if (household.deviceSerialNo == null || household.deviceSerialNo!.isEmpty) missing.add('Device Serial No');
     if (household.latitude == null || household.longitude == null) missing.add('GPS Location');
     if (household.housePic == null || household.housePic!.isEmpty) missing.add('House Image');
     if (household.cookstovePic == null || household.cookstovePic!.isEmpty) missing.add('Cookstove Image');

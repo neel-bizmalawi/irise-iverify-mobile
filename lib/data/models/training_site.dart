@@ -56,7 +56,7 @@ class TrainingSite {
   });
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = {
       'training_point_id': trainingPointId,
       'is_parent': isParent,
       'm_training_point_id': mTrainingPointId,
@@ -81,9 +81,16 @@ class TrainingSite {
       'created_date': createdDate,
       'modified_date': modifiedDate,
       'status': status,
-      'offline_id': offlineId,
       'server_time': serverTime,
     };
+    
+    // Only include offline_id if it has a value
+    // This allows SQLite to auto-generate it when null
+    if (offlineId != null) {
+      map['offline_id'] = offlineId;
+    }
+    
+    return map;
   }
 
   factory TrainingSite.fromMap(Map<String, dynamic> map) {

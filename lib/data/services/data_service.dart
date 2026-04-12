@@ -2084,9 +2084,15 @@ class DataService {
       for (int i = 0; i < beneficiaries.length; i++) {
         final beneficiary = beneficiaries[i];
         
-        // Add all non-file fields
+        // Add all non-file fields (excluding offline_id - server doesn't accept it)
         beneficiary.forEach((key, value) {
           if (value != null) {
+            // Skip offline_id - it's only for local tracking
+            if (key == 'offline_id') {
+              developer.log('Skipping offline_id field (local tracking only)', name: 'DataService');
+              return; // Skip this field
+            }
+            
             // Check if this is a file path field
             if (key == 'national_id_attachment' || 
                 key == 'house_pic' || 

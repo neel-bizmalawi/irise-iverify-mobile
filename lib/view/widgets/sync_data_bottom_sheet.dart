@@ -156,70 +156,80 @@ class _SyncDataBottomSheetState extends State<SyncDataBottomSheet>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Syncing New Data...',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+            // Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Syncing New Data...',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                if (_status != SyncStatus.downloading)
-                  IconButton(
-                    onPressed: () {
-                      // Return true if sync was completed successfully, false otherwise
-                      final shouldReturnTrue = _status == SyncStatus.completed;
-                      Navigator.of(context).pop(shouldReturnTrue);
-                    },
-                    icon: const Icon(Icons.close, size: 20),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-              ],
+                  if (_status != SyncStatus.downloading)
+                    IconButton(
+                      onPressed: () {
+                        // Return true if sync was completed successfully, false otherwise
+                        final shouldReturnTrue = _status == SyncStatus.completed;
+                        Navigator.of(context).pop(shouldReturnTrue);
+                      },
+                      icon: const Icon(Icons.close, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // Content based on status
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: _buildContent(),
-          ),
+            // Content based on status
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildContent(),
+            ),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // Action buttons
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            child: _buildActionButtons(),
-          ),
-        ],
+            // Action buttons with extra bottom padding for navigation bar
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                0,
+                24,
+                MediaQuery.of(context).viewInsets.bottom + 24, // Add extra padding for keyboard/nav bar
+              ),
+              child: _buildActionButtons(),
+            ),
+            
+            // Additional safe area padding at the bottom
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
       ),
     );
   }
@@ -728,6 +738,7 @@ Future<bool?> showSyncDataBottomSheet({
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     isDismissible: false,
+    useSafeArea: true, // Changed to true for better safe area handling
     builder: (context) => SyncDataBottomSheet(
       moduleName: moduleName,
       onCheckForData: onCheckForData,

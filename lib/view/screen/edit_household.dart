@@ -133,28 +133,49 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     try {
       developer.log('Loading beneficiary with ID: ${widget.householdId}', name: 'EditHouseholdScreen');
       
-      // Try to parse as beneficiary_id or offline_id
-      final id = int.tryParse(widget.householdId!);
-      
-      if (id != null) {
-        // Use getById which properly queries by beneficiary_id OR offline_id
-        _beneficiary = await _beneficiaryRepo.getById(id);
-        
-        if (_beneficiary == null) {
-          developer.log('Beneficiary not found with ID: $id', name: 'EditHouseholdScreen');
-          setState(() => _isLoading = false);
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Beneficiary not found'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            context.pop();
-          }
-          return;
+      // Parse the householdId - it could be "b_123" (beneficiary_id) or "o_456" (offline_id)
+      // This prevents ID collision between beneficiary_id and offline_id
+      if (widget.householdId!.startsWith('b_')) {
+        // Server beneficiary - use beneficiary_id
+        final beneficiaryId = int.tryParse(widget.householdId!.substring(2));
+        if (beneficiaryId != null) {
+          _beneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
+          developer.log('Loaded by beneficiary_id: $beneficiaryId', name: 'EditHouseholdScreen');
         }
+      } else if (widget.householdId!.startsWith('o_')) {
+        // Local beneficiary - use offline_id
+        final offlineId = int.tryParse(widget.householdId!.substring(2));
+        if (offlineId != null) {
+          _beneficiary = await _beneficiaryRepo.getByOfflineId(offlineId);
+          developer.log('Loaded by offline_id: $offlineId', name: 'EditHouseholdScreen');
+        }
+      } else {
+        // Fallback: try to parse as plain number (for backward compatibility)
+        final id = int.tryParse(widget.householdId!);
+        if (id != null) {
+          // Try beneficiary_id first, then offline_id
+          _beneficiary = await _beneficiaryRepo.getByBeneficiaryId(id);
+          if (_beneficiary == null) {
+            _beneficiary = await _beneficiaryRepo.getByOfflineId(id);
+          }
+          developer.log('Loaded by fallback ID: $id', name: 'EditHouseholdScreen');
+        }
+      }
+      
+      if (_beneficiary == null) {
+        developer.log('Beneficiary not found with ID: ${widget.householdId}', name: 'EditHouseholdScreen');
+        setState(() => _isLoading = false);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Beneficiary not found'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          context.pop();
+        }
+        return;
       }
       
       if (_beneficiary != null) {
@@ -586,7 +607,15 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         developer.log('Household saved successfully to database', name: 'EditHouseholdScreen');
         
         // Reload the complete beneficiary data from database for potential sync
-        final reloadedBeneficiary = await _beneficiaryRepo.getById(updatedBeneficiary.beneficiaryId ?? updatedBeneficiary.offlineId!);
+        // CRITICAL: Use specific lookup methods to avoid ID collision
+        Beneficiary? reloadedBeneficiary;
+        
+        if (updatedBeneficiary.beneficiaryId != null) {
+          reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(updatedBeneficiary.beneficiaryId!);
+        } else if (updatedBeneficiary.offlineId != null) {
+          reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(updatedBeneficiary.offlineId!);
+        }
+        
         if (reloadedBeneficiary != null) {
           developer.log('Reloaded complete beneficiary data from database', name: 'EditHouseholdScreen');
           developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'EditHouseholdScreen');
@@ -725,7 +754,21 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
       
       // Reload complete beneficiary data from database
-      final reloadedBeneficiary = await _beneficiaryRepo.getById(_beneficiary!.beneficiaryId ?? _beneficiary!.offlineId!);
+      // CRITICAL: Use specific lookup methods to avoid ID collision
+      // If beneficiary has beneficiary_id, use getByBeneficiaryId
+      // If beneficiary only has offline_id, use getByOfflineId
+      Beneficiary? reloadedBeneficiary;
+      
+      if (_beneficiary!.beneficiaryId != null) {
+        developer.log('Reloading beneficiary for sync using beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
+        reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(_beneficiary!.beneficiaryId!);
+      } else if (_beneficiary!.offlineId != null) {
+        developer.log('Reloading beneficiary for sync using offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
+        reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(_beneficiary!.offlineId!);
+      } else {
+        throw Exception('Beneficiary has no beneficiary_id or offline_id');
+      }
+      
       if (reloadedBeneficiary == null) {
         throw Exception('Failed to reload beneficiary data');
       }

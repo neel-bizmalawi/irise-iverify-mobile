@@ -883,8 +883,13 @@ class _BeneficiaryCard extends StatelessWidget {
                               GestureDetector(
                                 onTap: () async {
                                   // Navigate to edit screen
+                                  // CRITICAL: Use prefixed format to prevent ID collision
+                                  // b_ prefix = beneficiary_id (server), o_ prefix = offline_id (local)
+                                  final idParam = beneficiary.beneficiaryId != null
+                                      ? 'b_${beneficiary.beneficiaryId}'
+                                      : 'o_${beneficiary.offlineId}';
                                   await context.push(
-                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=${beneficiary.beneficiaryId ?? beneficiary.offlineId}',
+                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=$idParam',
                                   );
                                 },
                                 child: const Icon(

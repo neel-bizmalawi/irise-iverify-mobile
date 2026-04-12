@@ -18,16 +18,14 @@ class BeneficiaryRepository {
         );
         
         if (existing.isNotEmpty) {
-          // Update existing record - preserve the local id
-          final existingId = existing.first['id'] as int;
-          developer.log('Updating existing beneficiary with beneficiary_id: ${beneficiary.beneficiaryId} (local id: $existingId)', name: 'BeneficiaryRepository');
+          // Update existing record - preserve the local offline_id
+          final existingOfflineId = existing.first['offline_id'] as int;
+          developer.log('Updating existing beneficiary with beneficiary_id: ${beneficiary.beneficiaryId} (local offline_id: $existingOfflineId)', name: 'BeneficiaryRepository');
           
-          // Create updated beneficiary with preserved local id
-          final beneficiaryWithId = beneficiary.copyWith(id: existingId);
-          
+          // Update existing record
           return await db.update(
             'beneficiaries',
-            beneficiaryWithId.toMap(),
+            beneficiary.toMap(),
             where: 'beneficiary_id = ?',
             whereArgs: [beneficiary.beneficiaryId],
           );
@@ -110,18 +108,16 @@ class BeneficiaryRepository {
         );
         
         if (existing.isNotEmpty) {
-          final existingId = existing.first['id'] as int;
-          final beneficiaryWithId = beneficiary.copyWith(id: existingId);
-          
+          // Update existing record using beneficiary_id
           return await db.update(
             'beneficiaries',
-            beneficiaryWithId.toMap(),
+            beneficiary.toMap(),
             where: 'beneficiary_id = ?',
             whereArgs: [beneficiary.beneficiaryId],
           );
         }
       } else if (beneficiary.offlineId != null) {
-        // Get existing record to preserve local id
+        // Update existing record using offline_id
         final existing = await db.query(
           'beneficiaries',
           where: 'offline_id = ?',
@@ -129,12 +125,10 @@ class BeneficiaryRepository {
         );
         
         if (existing.isNotEmpty) {
-          final existingId = existing.first['id'] as int;
-          final beneficiaryWithId = beneficiary.copyWith(id: existingId);
-          
+          // Update existing record using offline_id
           return await db.update(
             'beneficiaries',
-            beneficiaryWithId.toMap(),
+            beneficiary.toMap(),
             where: 'offline_id = ?',
             whereArgs: [beneficiary.offlineId],
           );
@@ -206,6 +200,9 @@ class BeneficiaryRepository {
       int updated = 0;
       int failed = 0;
       
+      // Get the current max offline_id to assign new ones for downloaded beneficiaries
+      int nextOfflineId = await getNextOfflineId();
+      
       // Process each beneficiary individually to avoid transaction rollback on single failure
       for (var beneficiary in beneficiaries) {
         try {
@@ -218,16 +215,14 @@ class BeneficiaryRepository {
             );
             
             if (existing.isNotEmpty) {
-              // Update existing record - preserve the local id
-              final existingId = existing.first['id'] as int;
-              developer.log('Bulk update: beneficiary_id ${beneficiary.beneficiaryId} (local id: $existingId)', name: 'BeneficiaryRepository');
+              // Update existing record - preserve the local offline_id
+              final existingOfflineId = existing.first['offline_id'] as int;
+              developer.log('Bulk update: beneficiary_id ${beneficiary.beneficiaryId} (local offline_id: $existingOfflineId)', name: 'BeneficiaryRepository');
               
-              // Create updated beneficiary with preserved local id
-              final beneficiaryWithId = beneficiary.copyWith(id: existingId);
-              
+              // Update existing record
               await db.update(
                 'beneficiaries',
-                beneficiaryWithId.toMap(),
+                beneficiary.toMap(),
                 where: 'beneficiary_id = ?',
                 whereArgs: [beneficiary.beneficiaryId],
                 conflictAlgorithm: ConflictAlgorithm.replace,
@@ -237,11 +232,20 @@ class BeneficiaryRepository {
             }
           }
           
+          // CRITICAL FIX: Assign offline_id to downloaded beneficiaries if they don't have one
+          // This prevents ID collision and ensures proper tracking
+          Beneficiary beneficiaryToInsert = beneficiary;
+          if (beneficiary.offlineId == null) {
+            beneficiaryToInsert = beneficiary.copyWith(offlineId: nextOfflineId);
+            developer.log('Assigning offline_id $nextOfflineId to downloaded beneficiary_id ${beneficiary.beneficiaryId}', name: 'BeneficiaryRepository');
+            nextOfflineId++;
+          }
+          
           // Insert new record (don't include id, let SQLite auto-generate it)
-          developer.log('Bulk insert: beneficiary_id ${beneficiary.beneficiaryId}, offline_id ${beneficiary.offlineId}', name: 'BeneficiaryRepository');
+          developer.log('Bulk insert: beneficiary_id ${beneficiaryToInsert.beneficiaryId}, offline_id ${beneficiaryToInsert.offlineId}', name: 'BeneficiaryRepository');
           await db.insert(
             'beneficiaries',
-            beneficiary.toMap(),
+            beneficiaryToInsert.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
           inserted++;

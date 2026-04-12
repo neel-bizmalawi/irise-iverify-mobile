@@ -28,6 +28,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: false,
       builder: (context) => _SearchableDropdownDialog<T>(
         items: widget.items,
         itemLabel: widget.itemLabel,
@@ -214,6 +215,7 @@ class _SearchableDropdownDialogState<T>
                     ),
                   )
                 : ListView.builder(
+                    padding: EdgeInsets.zero,
                     itemCount: _filteredItems.length,
                     itemBuilder: (context, index) {
                       final item = _filteredItems[index];

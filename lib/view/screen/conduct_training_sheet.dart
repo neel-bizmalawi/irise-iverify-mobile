@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:irise/data/repositories/training_site_repository.dart';
+import 'package:irise/data/models/training_site.dart';
 import 'dart:developer' as developer;
 
 class ConductTrainingSheet extends StatefulWidget {
   final String siteName;
-  final int trainingPointId;
+  final String trainingPointId; // Changed to String to support prefixed IDs (t_123 or o_456)
   
   const ConductTrainingSheet({
     super.key,
@@ -239,7 +240,31 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
 
       // Update local database only (no API call)
       final repository = TrainingSiteRepository();
-      final trainingSite = await repository.getById(widget.trainingPointId);
+      
+      // Parse the prefixed ID (t_123 or o_456)
+      TrainingSite? trainingSite;
+      if (widget.trainingPointId.startsWith('t_')) {
+        // Server training site - use training_point_id
+        final trainingPointId = int.tryParse(widget.trainingPointId.substring(2));
+        if (trainingPointId != null) {
+          trainingSite = await repository.getByTrainingPointId(trainingPointId);
+          developer.log('Loaded by training_point_id: $trainingPointId', name: 'ConductTrainingSheet');
+        }
+      } else if (widget.trainingPointId.startsWith('o_')) {
+        // Local training site - use offline_id
+        final offlineId = int.tryParse(widget.trainingPointId.substring(2));
+        if (offlineId != null) {
+          trainingSite = await repository.getByOfflineId(offlineId);
+          developer.log('Loaded by offline_id: $offlineId', name: 'ConductTrainingSheet');
+        }
+      } else {
+        // Fallback: try to parse as plain number (for backward compatibility)
+        final id = int.tryParse(widget.trainingPointId);
+        if (id != null) {
+          trainingSite = await repository.getById(id);
+          developer.log('Loaded by fallback ID: $id', name: 'ConductTrainingSheet');
+        }
+      }
       
       if (trainingSite != null) {
         final updatedSite = trainingSite.copyWith(
@@ -252,6 +277,8 @@ class _ConductTrainingSheetState extends State<ConductTrainingSheet> {
         
         await repository.update(updatedSite);
         developer.log('Local database updated successfully', name: 'ConductTrainingSheet');
+      } else {
+        developer.log('ERROR: Training site not found!', name: 'ConductTrainingSheet');
       }
 
       // Close loading dialog

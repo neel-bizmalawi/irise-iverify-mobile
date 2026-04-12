@@ -28,6 +28,7 @@ class _SimpleDropdownState<T> extends State<SimpleDropdown<T>> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      useSafeArea: false,
       builder: (context) => _SimpleDropdownBottomSheet<T>(
         items: widget.items,
         itemLabel: widget.itemLabel,
@@ -162,6 +163,7 @@ class _SimpleDropdownBottomSheet<T> extends StatelessWidget {
                   )
                 : ListView.builder(
                     shrinkWrap: true,
+                    padding: EdgeInsets.zero,
                     itemCount: items.length,
                     itemBuilder: (context, index) {
                       final item = items[index];

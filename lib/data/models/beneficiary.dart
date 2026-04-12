@@ -96,8 +96,7 @@ class Beneficiary {
   });
 
   Map<String, dynamic> toMap() {
-    return {
-      if (id != null) 'id': id,
+    final map = <String, dynamic>{
       'beneficiary_id': beneficiaryId,
       'training_site': trainingSite,
       'm_user_id': mUserId,
@@ -140,10 +139,17 @@ class Beneficiary {
       'modified_by': modifiedBy,
       'status': status,
       's_is_sync': sIsSync,
-      'offline_id': offlineId,
       'server_time': serverTime,
       'distribution_date': distributionDate,
     };
+    
+    // Only include offline_id if it has a value
+    // This allows SQLite to auto-generate it when null
+    if (offlineId != null) {
+      map['offline_id'] = offlineId;
+    }
+    
+    return map;
   }
 
   factory Beneficiary.fromMap(Map<String, dynamic> map) {
@@ -197,12 +203,16 @@ class Beneficiary {
     );
   }
 
-  // Convert to JSON for API sync (exclude offline_id)
+  // Convert to JSON for API sync
+  // CRITICAL: Always include offline_id so server can return the mapping
   Map<String, dynamic> toJsonForSync() {
     // Determine if this is a new record (no beneficiary_id) or an update (has beneficiary_id)
     final isNewRecord = beneficiaryId == null;
     
     return {
+      // CRITICAL: Always include offline_id for server mapping
+      'offline_id': offlineId,
+      // Only include beneficiary_id if it exists (for updates)
       if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       'training_site': trainingSite,
       'm_user_id': mUserId,
@@ -248,13 +258,16 @@ class Beneficiary {
       'status': status,
       's_is_sync': sIsSync,
       'distribution_date': distributionDate,
-      // Exclude offline_id from sync - it's only for local tracking
     };
   }
 
   // Convert to JSON for household sync (only fields updated on EditHouseholdScreen)
+  // CRITICAL: Always include offline_id so server can return the mapping
   Map<String, dynamic> toJsonForHouseholdSync() {
     return {
+      // CRITICAL: Always include offline_id for server mapping
+      'offline_id': offlineId,
+      // Only include beneficiary_id if it exists
       if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       // Household-specific fields (updated on EditHouseholdScreen)
       'device_serial_no': deviceSerialNo,
@@ -271,7 +284,6 @@ class Beneficiary {
       'modified_by': modifiedBy,
       'status': status,
       'distribution_date': distributionDate,
-      // Exclude offline_id from sync - it's only for local tracking
     };
   }
 

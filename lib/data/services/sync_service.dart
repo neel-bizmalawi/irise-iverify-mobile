@@ -76,9 +76,12 @@ class SyncService {
                     .map((json) => Beneficiary.fromJson(json))
                     .toList();
                 
-                // Note: Beneficiaries from server are assumed to be synced
-                // The model should handle s_is_sync in fromJson or we need to add copyWith
-                await _beneficiaryRepo.insertBulk(beneficiaries);
+                // Mark all as synced since they come from server
+                final beneficiariesWithSyncStatus = beneficiaries.map((beneficiary) => 
+                  beneficiary.copyWith(sIsSync: 1)
+                ).toList();
+                
+                await _beneficiaryRepo.insertBulk(beneficiariesWithSyncStatus);
                 beneficiariesCount = beneficiaries.length;
               } catch (e) {
                 developer.log('Error syncing beneficiaries: $e', name: 'SyncService');

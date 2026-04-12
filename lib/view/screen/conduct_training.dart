@@ -15,7 +15,7 @@ import 'dart:developer' as developer;
 Future<bool?> showConductTrainingSheet(
   BuildContext context,
   String siteName,
-  int trainingPointId,
+  String trainingPointId, // Changed to String to support prefixed IDs (t_123 or o_456)
 ) async {
   // Verify data has been fetched and persisted before allowing training
   try {
@@ -50,6 +50,7 @@ Future<bool?> showConductTrainingSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    useSafeArea: false,
     builder: (_) => ConductTrainingSheet(
       siteName: siteName,
       trainingPointId: trainingPointId,
@@ -696,6 +697,7 @@ class _TrainingCardState extends State<_TrainingCard> {
         if (!mounted) return;
         await showModalBottomSheet(
           context: context,
+          useSafeArea: false,
           builder: (BuildContext context) {
             return SafeArea(
               child: Column(
@@ -890,22 +892,33 @@ class _TrainingCardState extends State<_TrainingCard> {
                       filled: true,
                       synced: synced,
                       onTap: () async {
+                        // CRITICAL: Use prefixed ID to prevent collision
+                        // t_ prefix = trainingPointId (server), o_ prefix = offline_id (local)
+                        final idParam = _currentSite.trainingPointId != null
+                            ? 't_${_currentSite.trainingPointId}'
+                            : 'o_${_currentSite.offlineId}';
+                        
                         final result = await showConductTrainingSheet(
                           context,
                           _currentSite.trainingSite ?? 'Unnamed Site',
-                          _currentSite.trainingPointId ?? _currentSite.offlineId ?? 0,
+                          idParam,
                         );
                         
                         // If training was completed successfully, refresh the training site
                         if (result == true) {
                           final repository = TrainingSiteRepository();
-                          final updatedSite = await repository.getById(
-                            _currentSite.trainingPointId ?? _currentSite.offlineId ?? 0,
-                          );
+                          
+                          // Use specific lookup method based on ID type
+                          TrainingSite? updatedSite;
+                          if (_currentSite.trainingPointId != null) {
+                            updatedSite = await repository.getByTrainingPointId(_currentSite.trainingPointId!);
+                          } else if (_currentSite.offlineId != null) {
+                            updatedSite = await repository.getByOfflineId(_currentSite.offlineId!);
+                          }
                           
                           if (updatedSite != null && mounted) {
                             setState(() {
-                              _currentSite = updatedSite;
+                              _currentSite = updatedSite!; // Add ! to assert non-null
                             });
                           }
                         }

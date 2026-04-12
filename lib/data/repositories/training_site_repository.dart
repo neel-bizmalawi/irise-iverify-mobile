@@ -23,7 +23,7 @@ class TrainingSiteRepository {
           // Existing record has local unsynced changes and incoming is from server
           // DO NOT overwrite local changes
           developer.log('Skipping insert - existing record has local unsynced changes: ${trainingSite.trainingSite}', name: 'TrainingSiteRepo');
-          return existing['id'] as int;
+          return existing['offline_id'] as int;
         }
         
         // Record exists - update it instead
@@ -31,10 +31,10 @@ class TrainingSiteRepository {
         await db.update(
           _tableName,
           trainingSite.toMap(),
-          where: 'id = ?',
-          whereArgs: [existing['id']],
+          where: 'offline_id = ?',
+          whereArgs: [existing['offline_id']],
         );
-        return existing['id'] as int;
+        return existing['offline_id'] as int;
       } else {
         // Record doesn't exist - insert it
         final id = await db.insert(
@@ -76,12 +76,12 @@ class TrainingSiteRepository {
       
       // Check if our test records exist before bulk insert
       final testRecordsBefore = await db.rawQuery(
-        'SELECT id, training_point_id, offline_id, training_site, s_is_sync FROM $_tableName WHERE training_site IN (?, ?, ?)',
+        'SELECT offline_id, training_point_id, training_site, s_is_sync FROM $_tableName WHERE training_site IN (?, ?, ?)',
         ['t', 'tt', 'ttt']
       );
       developer.log('>>> Test records BEFORE bulk insert:', name: 'TrainingSiteRepo');
       for (var record in testRecordsBefore) {
-        developer.log('>>>   ${record['training_site']}: id=${record['id']}, training_point_id=${record['training_point_id']}, offline_id=${record['offline_id']}, s_is_sync=${record['s_is_sync']}', name: 'TrainingSiteRepo');
+        developer.log('>>>   ${record['training_site']}: offline_id=${record['offline_id']}, training_point_id=${record['training_point_id']}, s_is_sync=${record['s_is_sync']}', name: 'TrainingSiteRepo');
       }
       
       // CRITICAL FIX: Separate incoming records into synced (from server) and unsynced (local)
@@ -111,7 +111,7 @@ class TrainingSiteRepository {
             final incomingTrainingPointId = site.trainingPointId;
             
             if (isTestRecord) {
-              developer.log('>>> Found existing: id=${existing['id']}, training_point_id=$existingTrainingPointId, offline_id=$existingOfflineId, s_is_sync=$existingSIsSync', name: 'TrainingSiteRepo');
+              developer.log('>>> Found existing: offline_id=${existing['offline_id']}, training_point_id=$existingTrainingPointId, s_is_sync=$existingSIsSync', name: 'TrainingSiteRepo');
             }
             
             // CRITICAL: Preserve offline_id if incoming record doesn't have it
@@ -140,8 +140,8 @@ class TrainingSiteRepository {
               await db.update(
                 _tableName,
                 siteToUpdate.toMap(),
-                where: 'id = ?',
-                whereArgs: [existing['id']],
+                where: 'offline_id = ?',
+                whereArgs: [existing['offline_id']],
               );
               updated++;
               if (isTestRecord) {
@@ -152,8 +152,8 @@ class TrainingSiteRepository {
               await db.update(
                 _tableName,
                 siteToUpdate.toMap(),
-                where: 'id = ?',
-                whereArgs: [existing['id']],
+                where: 'offline_id = ?',
+                whereArgs: [existing['offline_id']],
               );
               updated++;
               if (isTestRecord) {
@@ -212,12 +212,12 @@ class TrainingSiteRepository {
       
       // Check if our test records exist after bulk insert
       final testRecordsAfter = await db.rawQuery(
-        'SELECT id, training_point_id, offline_id, training_site, s_is_sync FROM $_tableName WHERE training_site IN (?, ?, ?)',
+        'SELECT offline_id, training_point_id, training_site, s_is_sync FROM $_tableName WHERE training_site IN (?, ?, ?)',
         ['t', 'tt', 'ttt']
       );
       developer.log('>>> Test records AFTER bulk insert:', name: 'TrainingSiteRepo');
       for (var record in testRecordsAfter) {
-        developer.log('>>>   ${record['training_site']}: id=${record['id']}, training_point_id=${record['training_point_id']}, offline_id=${record['offline_id']}, s_is_sync=${record['s_is_sync']}', name: 'TrainingSiteRepo');
+        developer.log('>>>   ${record['training_site']}: offline_id=${record['offline_id']}, training_point_id=${record['training_point_id']}, s_is_sync=${record['s_is_sync']}', name: 'TrainingSiteRepo');
       }
       
       developer.log('========================================', name: 'TrainingSiteRepo');
@@ -306,7 +306,7 @@ class TrainingSiteRepository {
       final sampleCount = maps.length > 5 ? 5 : maps.length;
       for (int i = 0; i < sampleCount; i++) {
         final record = maps[i];
-        developer.log('  Record ${i + 1}: ${record['training_site']} (id=${record['id']}, training_point_id=${record['training_point_id']}, offline_id=${record['offline_id']}, s_is_sync=${record['s_is_sync']})', name: 'TrainingSiteRepo');
+        developer.log('  Record ${i + 1}: ${record['training_site']} (offline_id=${record['offline_id']}, training_point_id=${record['training_point_id']}, s_is_sync=${record['s_is_sync']})', name: 'TrainingSiteRepo');
       }
       developer.log('========================================', name: 'TrainingSiteRepo');
       
@@ -347,6 +347,46 @@ class TrainingSiteRepository {
       return TrainingSite.fromMap(maps.first);
     } catch (e) {
       developer.log('Error getting training site by id: $e', name: 'TrainingSiteRepo');
+      rethrow;
+    }
+  }
+
+  /// Get training site by training_point_id (server-assigned ID)
+  Future<TrainingSite?> getByTrainingPointId(int trainingPointId) async {
+    try {
+      final db = await _dbHelper.database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        _tableName,
+        where: 'training_point_id = ?',
+        whereArgs: [trainingPointId],
+      );
+      
+      if (maps.isNotEmpty) {
+        return TrainingSite.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      developer.log('Error getting training site by training_point_id: $e', name: 'TrainingSiteRepo');
+      rethrow;
+    }
+  }
+
+  /// Get training site by offline_id (locally-assigned ID)
+  Future<TrainingSite?> getByOfflineId(int offlineId) async {
+    try {
+      final db = await _dbHelper.database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        _tableName,
+        where: 'offline_id = ?',
+        whereArgs: [offlineId],
+      );
+      
+      if (maps.isNotEmpty) {
+        return TrainingSite.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      developer.log('Error getting training site by offline_id: $e', name: 'TrainingSiteRepo');
       rethrow;
     }
   }
@@ -445,10 +485,10 @@ class TrainingSiteRepository {
         final count = await db.update(
           _tableName,
           trainingSite.toMap(),
-          where: 'id = ?',
-          whereArgs: [existing['id']],
+          where: 'offline_id = ?',
+          whereArgs: [existing['offline_id']],
         );
-        developer.log('Updated training site by id: ${existing['id']}', name: 'TrainingSiteRepo');
+        developer.log('Updated training site by offline_id: ${existing['offline_id']}', name: 'TrainingSiteRepo');
         return count;
       }
       
