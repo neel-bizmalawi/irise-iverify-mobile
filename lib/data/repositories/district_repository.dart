@@ -13,7 +13,8 @@ class DistrictRepository {
     try {
       final db = await _dbHelper.database;
       final id = await db.insert(_tableName, _toMap(district));
-      developer.log('Inserted district: ${district.districtName}', name: 'DistrictRepository');
+      developer.log('Inserted district: ${district.districtName}',
+          name: 'DistrictRepository');
       return id;
     } catch (e) {
       developer.log('Error inserting district: $e', name: 'DistrictRepository');
@@ -26,7 +27,7 @@ class DistrictRepository {
     try {
       final db = await _dbHelper.database;
       final batch = db.batch();
-      
+
       for (final district in districts) {
         batch.insert(
           _tableName,
@@ -34,11 +35,13 @@ class DistrictRepository {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
-      
+
       await batch.commit(noResult: true);
-      developer.log('Bulk inserted ${districts.length} districts', name: 'DistrictRepository');
+      developer.log('Bulk inserted ${districts.length} districts',
+          name: 'DistrictRepository');
     } catch (e) {
-      developer.log('Error bulk inserting districts: $e', name: 'DistrictRepository');
+      developer.log('Error bulk inserting districts: $e',
+          name: 'DistrictRepository');
       rethrow;
     }
   }
@@ -51,10 +54,11 @@ class DistrictRepository {
         _tableName,
         orderBy: 'district_name ASC',
       );
-      
+
       return maps.map((map) => _fromMap(map)).toList();
     } catch (e) {
-      developer.log('Error getting all districts: $e', name: 'DistrictRepository');
+      developer.log('Error getting all districts: $e',
+          name: 'DistrictRepository');
       return [];
     }
   }
@@ -69,13 +73,14 @@ class DistrictRepository {
         whereArgs: [id],
         limit: 1,
       );
-      
+
       if (maps.isNotEmpty) {
         return _fromMap(maps.first);
       }
       return null;
     } catch (e) {
-      developer.log('Error getting district by ID: $e', name: 'DistrictRepository');
+      developer.log('Error getting district by ID: $e',
+          name: 'DistrictRepository');
       return null;
     }
   }
@@ -90,13 +95,14 @@ class DistrictRepository {
         whereArgs: [name],
         limit: 1,
       );
-      
+
       if (maps.isNotEmpty) {
         return _fromMap(maps.first);
       }
       return null;
     } catch (e) {
-      developer.log('Error getting district by name: $e', name: 'DistrictRepository');
+      developer.log('Error getting district by name: $e',
+          name: 'DistrictRepository');
       return null;
     }
   }
@@ -148,10 +154,12 @@ class DistrictRepository {
   Future<int> getCount() async {
     try {
       final db = await _dbHelper.database;
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
+      final result =
+          await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
-      developer.log('Error getting district count: $e', name: 'DistrictRepository');
+      developer.log('Error getting district count: $e',
+          name: 'DistrictRepository');
       return 0;
     }
   }
@@ -160,6 +168,7 @@ class DistrictRepository {
   Map<String, dynamic> _toMap(District district) {
     return {
       'id': district.id,
+      'district_id': district.districtId,
       'district_name': district.districtName,
       'slug': district.slug,
       'region': district.region,
@@ -171,6 +180,7 @@ class DistrictRepository {
   District _fromMap(Map<String, dynamic> map) {
     return District(
       id: map['id'] as int?,
+      districtId: map['district_id'] as int?,
       districtName: map['district_name'] as String?,
       slug: map['slug'] as String?,
       region: map['region'] as String?,

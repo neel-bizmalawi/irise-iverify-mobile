@@ -15,18 +15,20 @@ import 'dart:developer' as developer;
 Future<bool?> showConductTrainingSheet(
   BuildContext context,
   String siteName,
-  String trainingPointId, // Changed to String to support prefixed IDs (t_123 or o_456)
+  String
+      trainingPointId, // Changed to String to support prefixed IDs (t_123 or o_456)
 ) async {
   // Verify data has been fetched and persisted before allowing training
   try {
     final dataService = DataService();
     final verificationResult = await dataService.verifyDataPersistence();
-    
+
     if (!verificationResult.success || verificationResult.data == false) {
       if (!context.mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(verificationResult.message ?? 'Please sync data from the dashboard first'),
+          content: Text(verificationResult.message ??
+              'Please sync data from the dashboard first'),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 4),
         ),
@@ -71,7 +73,7 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
   final TrainingSiteRepository _repository = TrainingSiteRepository();
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  
+
   List<TrainingSite> _trainingSites = [];
   String _searchQuery = '';
   bool _isLoading = true;
@@ -83,7 +85,7 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
     _scrollController.addListener(_onScroll);
     _loadTrainingSites();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -108,29 +110,38 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
     });
 
     try {
-      developer.log('========================================', name: 'ConductTraining');
+      developer.log('========================================',
+          name: 'ConductTraining');
       developer.log('LOADING TRAINING SITES', name: 'ConductTraining');
-      developer.log('========================================', name: 'ConductTraining');
-      
+      developer.log('========================================',
+          name: 'ConductTraining');
+
       final sites = await _repository.getAll();
-      
-      developer.log('Loaded ${sites.length} training sites from repository', name: 'ConductTraining');
-      
+
+      developer.log('Loaded ${sites.length} training sites from repository',
+          name: 'ConductTraining');
+
       // Log first 5 for debugging
       final sampleCount = sites.length > 5 ? 5 : sites.length;
       for (int i = 0; i < sampleCount; i++) {
         final site = sites[i];
-        developer.log('  Site ${i + 1}: ${site.trainingSite} (training_point_id: ${site.trainingPointId}, offline_id: ${site.offlineId}, s_is_sync: ${site.sIsSync})', name: 'ConductTraining');
+        developer.log(
+            '  Site ${i + 1}: ${site.trainingSite} (training_point_id: ${site.trainingPointId}, offline_id: ${site.offlineId}, s_is_sync: ${site.sIsSync})',
+            name: 'ConductTraining');
       }
-      
+
       setState(() {
         _trainingSites = sites;
       });
-      
-      developer.log('State updated with ${_trainingSites.length} training sites', name: 'ConductTraining');
-      developer.log('========================================', name: 'ConductTraining');
+
+      developer.log(
+          'State updated with ${_trainingSites.length} training sites',
+          name: 'ConductTraining');
+      developer.log('========================================',
+          name: 'ConductTraining');
     } catch (e) {
-      developer.log('Error loading training sites: $e', name: 'ConductTraining');
+      developer.log('Error loading training sites: $e',
+          name: 'ConductTraining');
       _showErrorSnackBar('Error loading training sites: $e');
     } finally {
       setState(() {
@@ -141,31 +152,34 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
 
   List<TrainingSite> get _filteredSites {
     final filtered = _trainingSites
-        .where((site) => 
-            (site.trainingSite ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            (site.district ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            (site.traditionalAuthority ?? '').toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where((site) =>
+            (site.trainingSite ?? '')
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase()) ||
+            (site.district?.toString() ?? '').contains(_searchQuery) ||
+            (site.traditionalAuthority?.toString() ?? '')
+                .contains(_searchQuery))
         .toList();
-    
+
     // Sort: unsynced sites first, then synced sites by training_point_id in descending order
     filtered.sort((a, b) {
       // If one is unsynced and the other is synced, unsynced comes first
       if (a.sIsSync == 0 && b.sIsSync == 1) return -1;
       if (a.sIsSync == 1 && b.sIsSync == 0) return 1;
-      
+
       // If both are unsynced, sort by offline_id in descending order (newer items first)
       if (a.sIsSync == 0 && b.sIsSync == 0) {
         final aId = a.offlineId ?? 0;
         final bId = b.offlineId ?? 0;
         return bId.compareTo(aId); // Descending order
       }
-      
+
       // If both are synced, sort by training_point_id in descending order
       final aId = a.trainingPointId ?? 0;
       final bId = b.trainingPointId ?? 0;
       return bId.compareTo(aId); // Descending order
     });
-    
+
     return filtered;
   }
 
@@ -244,7 +258,8 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
             right: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F5E9),
                   borderRadius: BorderRadius.circular(20),
@@ -348,7 +363,8 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -395,7 +411,8 @@ class _ConductTrainingScreenState extends State<ConductTrainingScreen> {
                       color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
+                          color:
+                              const Color(0xFF4CAF50).withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       '• ${_filteredSites.length}/${_trainingSites.length} Training Sites',
@@ -465,7 +482,8 @@ class _TrainingCardState extends State<_TrainingCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Internet is off. Please connect to the internet to sync.'),
+            content: Text(
+                'Internet is off. Please connect to the internet to sync.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -473,7 +491,7 @@ class _TrainingCardState extends State<_TrainingCard> {
       }
       return;
     }
-    
+
     if (_currentSite.sIsSync == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -488,12 +506,13 @@ class _TrainingCardState extends State<_TrainingCard> {
     try {
       final dataService = DataService();
       final verificationResult = await dataService.verifyDataPersistence();
-      
+
       if (!verificationResult.success || verificationResult.data == false) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(verificationResult.message ?? 'Please sync data from the dashboard first'),
+            content: Text(verificationResult.message ??
+                'Please sync data from the dashboard first'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 4),
           ),
@@ -523,72 +542,83 @@ class _TrainingCardState extends State<_TrainingCard> {
     while (retryCount < maxRetries) {
       try {
         final dataService = DataService();
-        
+
         final siteData = _currentSite.toApiJson();
-        
+
         // IMPORTANT: Only include training_point_id for UPDATES (not for initial creation)
         // A training site is an UPDATE if it has a training_point_id (was previously synced to server)
         // A training site is a CREATE if it only has offline_id (never synced before)
         if (_currentSite.trainingPointId != null) {
           // This is an update - include training_point_id so server knows which record to update
           siteData['training_point_id'] = _currentSite.trainingPointId;
-          developer.log('Syncing UPDATE for training site with training_point_id: ${_currentSite.trainingPointId}', name: 'ConductTraining');
+          developer.log(
+              'Syncing UPDATE for training site with training_point_id: ${_currentSite.trainingPointId}',
+              name: 'ConductTraining');
         } else {
           // This is a new creation - include created_date
           if (_currentSite.createdDate != null) {
             siteData['created_date'] = _currentSite.createdDate;
           }
-          developer.log('Syncing NEW training site with offline_id: ${_currentSite.offlineId}', name: 'ConductTraining');
+          developer.log(
+              'Syncing NEW training site with offline_id: ${_currentSite.offlineId}',
+              name: 'ConductTraining');
         }
-        
+
         // Include training completion fields if they exist
         if (_currentSite.conductTrainingDate != null) {
           siteData['conduct_training_date'] = _currentSite.conductTrainingDate;
         }
         if (_currentSite.numberOfPeoplePresent != null) {
-          siteData['number_of_people_present'] = _currentSite.numberOfPeoplePresent;
+          siteData['number_of_people_present'] =
+              _currentSite.numberOfPeoplePresent;
         }
-        
-        developer.log('Sync payload: ${siteData.toString()}', name: 'ConductTraining');
-        
+
+        developer.log('Sync payload: ${siteData.toString()}',
+            name: 'ConductTraining');
+
         final response = await dataService.syncTrainingSites([siteData]);
-        
+
         if (response.success) {
           // Extract training_point_id from mapping if available
           int? serverTrainingPointId;
-          if (response.data?.mapping != null && response.data!.mapping!.isNotEmpty) {
+          if (response.data?.mapping != null &&
+              response.data!.mapping!.isNotEmpty) {
             final mapping = response.data!.mapping!.first;
             serverTrainingPointId = mapping['training_point_id'] as int?;
-            developer.log('Server assigned training_point_id: $serverTrainingPointId', name: 'ConductTraining');
+            developer.log(
+                'Server assigned training_point_id: $serverTrainingPointId',
+                name: 'ConductTraining');
           }
-          
+
           final repository = TrainingSiteRepository();
-          
+
           // Update local record with server ID and mark as synced
           final updatedSite = _currentSite.copyWith(
             sIsSync: 1,
-            trainingPointId: serverTrainingPointId ?? _currentSite.trainingPointId,
+            trainingPointId:
+                serverTrainingPointId ?? _currentSite.trainingPointId,
           );
-          
+
           await repository.update(updatedSite);
-          
+
           setState(() {
             _currentSite = updatedSite;
             _isSyncing = false;
           });
-          
+
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(serverTrainingPointId != null 
+              content: Text(serverTrainingPointId != null
                   ? 'Training site synced successfully! ID: $serverTrainingPointId'
                   : 'Training site synced successfully!'),
               backgroundColor: const Color(0xFF4CAF50),
               duration: const Duration(seconds: 2),
             ),
           );
-          
-          final state = context.findAncestorStateOfType<_ConductTrainingScreenState>();
+
+          final state =
+              context.findAncestorStateOfType<_ConductTrainingScreenState>();
           state?._loadTrainingSites();
           return; // Success, exit retry loop
         } else {
@@ -601,16 +631,17 @@ class _TrainingCardState extends State<_TrainingCard> {
               continue; // Retry
             }
           }
-          
+
           // Non-retryable error or max retries reached
           setState(() {
             _isSyncing = false;
           });
-          
+
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Sync failed: ${response.message ?? "Unknown error"}${retryCount > 0 ? " (after $retryCount retries)" : ""}'),
+              content: Text(
+                  'Sync failed: ${response.message ?? "Unknown error"}${retryCount > 0 ? " (after $retryCount retries)" : ""}'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
             ),
@@ -624,11 +655,11 @@ class _TrainingCardState extends State<_TrainingCard> {
           await Future.delayed(retryDelay * retryCount);
           continue; // Retry
         }
-        
+
         setState(() {
           _isSyncing = false;
         });
-        
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -647,17 +678,17 @@ class _TrainingCardState extends State<_TrainingCard> {
     if (message == null) return false;
     final lowerMessage = message.toLowerCase();
     return lowerMessage.contains('conflict') ||
-           lowerMessage.contains('concurrent') ||
-           lowerMessage.contains('duplicate') ||
-           lowerMessage.contains('already exists') ||
-           lowerMessage.contains('timeout') ||
-           lowerMessage.contains('locked');
+        lowerMessage.contains('concurrent') ||
+        lowerMessage.contains('duplicate') ||
+        lowerMessage.contains('already exists') ||
+        lowerMessage.contains('timeout') ||
+        lowerMessage.contains('locked');
   }
 
   Future<void> _openInMap() async {
     final latitude = _currentSite.latitude;
     final longitude = _currentSite.longitude;
-    
+
     if (latitude == null || longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -670,7 +701,7 @@ class _TrainingCardState extends State<_TrainingCard> {
 
     try {
       final availableMaps = await MapLauncher.installedMaps;
-      
+
       if (availableMaps.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -684,13 +715,14 @@ class _TrainingCardState extends State<_TrainingCard> {
 
       final coords = Coords(latitude, longitude);
       final title = _currentSite.trainingSite ?? 'Training Site';
-      
+
       // If only one map app is available, open it directly
       if (availableMaps.length == 1) {
         await availableMaps.first.showMarker(
           coords: coords,
           title: title,
-          description: '${_currentSite.district ?? ''} • ${_currentSite.traditionalAuthority ?? ''}',
+          description:
+              '${_currentSite.district ?? ''} • ${_currentSite.traditionalAuthority ?? ''}',
         );
       } else {
         // Show a dialog to choose which map app to use
@@ -720,7 +752,8 @@ class _TrainingCardState extends State<_TrainingCard> {
                         map.showMarker(
                           coords: coords,
                           title: title,
-                          description: '${_currentSite.district ?? ''} • ${_currentSite.traditionalAuthority ?? ''}',
+                          description:
+                              '${_currentSite.district ?? ''} • ${_currentSite.traditionalAuthority ?? ''}',
                         );
                       },
                       title: Text(map.mapName),
@@ -749,17 +782,20 @@ class _TrainingCardState extends State<_TrainingCard> {
   }
 
   bool _hasEmptyFields() {
-    return _currentSite.trainingSite == null || _currentSite.trainingSite!.isEmpty ||
-           _currentSite.district == null || _currentSite.district!.isEmpty ||
-           _currentSite.villageHeadName == null || _currentSite.villageHeadName!.isEmpty ||
-           _currentSite.gvhName == null || _currentSite.gvhName!.isEmpty ||
-           _currentSite.traditionalAuthority == null || _currentSite.traditionalAuthority!.isEmpty ||
-           _currentSite.houseHoldsCount == null ||
-           _currentSite.cookstovesCount == null ||
-           _currentSite.houseHoldRadius == null ||
-           _currentSite.totalPeople == null ||
-           _currentSite.latitude == null ||
-           _currentSite.longitude == null;
+    return _currentSite.trainingSite == null ||
+        _currentSite.trainingSite!.isEmpty ||
+        _currentSite.district == null ||
+        _currentSite.villageHeadName == null ||
+        _currentSite.villageHeadName!.isEmpty ||
+        _currentSite.gvhName == null ||
+        _currentSite.gvhName!.isEmpty ||
+        _currentSite.traditionalAuthority == null ||
+        _currentSite.houseHoldsCount == null ||
+        _currentSite.cookstovesCount == null ||
+        _currentSite.houseHoldRadius == null ||
+        _currentSite.totalPeople == null ||
+        _currentSite.latitude == null ||
+        _currentSite.longitude == null;
   }
 
   void _editTrainingSite() {
@@ -772,7 +808,7 @@ class _TrainingCardState extends State<_TrainingCard> {
   Widget build(BuildContext context) {
     final bool synced = _currentSite.sIsSync == 1;
     final bool hasEmptyFields = _hasEmptyFields();
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -835,7 +871,7 @@ class _TrainingCardState extends State<_TrainingCard> {
               ],
             ),
             const SizedBox(height: 6),
-            
+
             // ── Location info ──
             Text(
               '${_currentSite.district ?? 'Unknown District'} • ${_currentSite.traditionalAuthority ?? 'Unknown Authority'}',
@@ -866,18 +902,18 @@ class _TrainingCardState extends State<_TrainingCard> {
                 ),
                 Spacer(),
                 Text(
-              'Training Done: ${(_currentSite.numberOfPeoplePresent != null) ? 'YES' : 'NO'}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-              ),
-            ),
+                  'Training Done: ${(_currentSite.numberOfPeoplePresent != null) ? 'YES' : 'NO'}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
+                ),
               ],
             ),
             // const SizedBox(height: 6),
-            
+
             // ── Training Done Status ──
-            
+
             const SizedBox(height: 8),
 
             // ── Action buttons ──
@@ -897,28 +933,31 @@ class _TrainingCardState extends State<_TrainingCard> {
                         final idParam = _currentSite.trainingPointId != null
                             ? 't_${_currentSite.trainingPointId}'
                             : 'o_${_currentSite.offlineId}';
-                        
+
                         final result = await showConductTrainingSheet(
                           context,
                           _currentSite.trainingSite ?? 'Unnamed Site',
                           idParam,
                         );
-                        
+
                         // If training was completed successfully, refresh the training site
                         if (result == true) {
                           final repository = TrainingSiteRepository();
-                          
+
                           // Use specific lookup method based on ID type
                           TrainingSite? updatedSite;
                           if (_currentSite.trainingPointId != null) {
-                            updatedSite = await repository.getByTrainingPointId(_currentSite.trainingPointId!);
+                            updatedSite = await repository.getByTrainingPointId(
+                                _currentSite.trainingPointId!);
                           } else if (_currentSite.offlineId != null) {
-                            updatedSite = await repository.getByOfflineId(_currentSite.offlineId!);
+                            updatedSite = await repository
+                                .getByOfflineId(_currentSite.offlineId!);
                           }
-                          
+
                           if (updatedSite != null && mounted) {
                             setState(() {
-                              _currentSite = updatedSite!; // Add ! to assert non-null
+                              _currentSite =
+                                  updatedSite!; // Add ! to assert non-null
                             });
                           }
                         }

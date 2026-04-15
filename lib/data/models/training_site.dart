@@ -6,8 +6,8 @@ class TrainingSite {
   final String roadAccess;
   final String? villageHeadName;
   final String? gvhName;
-  final String? district;
-  final String? traditionalAuthority;
+  final int? district;
+  final int? traditionalAuthority;
   final int? totalPeople;
   final int? houseHoldsCount;
   final int? cookstovesCount;
@@ -55,6 +55,12 @@ class TrainingSite {
     this.serverTime,
   });
 
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
   Map<String, dynamic> toMap() {
     final map = {
       'training_point_id': trainingPointId,
@@ -83,13 +89,13 @@ class TrainingSite {
       'status': status,
       'server_time': serverTime,
     };
-    
+
     // Only include offline_id if it has a value
     // This allows SQLite to auto-generate it when null
     if (offlineId != null) {
       map['offline_id'] = offlineId;
     }
-    
+
     return map;
   }
 
@@ -102,18 +108,22 @@ class TrainingSite {
       roadAccess: map['road_access'] ?? 'no',
       villageHeadName: map['village_head_name'],
       gvhName: map['gvh_name'],
-      district: map['district'],
-      traditionalAuthority: map['traditional_authority'],
+      district: _asInt(map['district']),
+      traditionalAuthority: _asInt(map['traditional_authority']),
       totalPeople: map['total_people'],
       houseHoldsCount: map['house_holds_count'],
       cookstovesCount: map['cookstoves_count'],
       houseHoldRadius: map['house_hold_radius'],
-      latitude: map['latitude'] is double 
-          ? map['latitude'] 
-          : (map['latitude'] != null ? double.tryParse(map['latitude'].toString()) : null),
-      longitude: map['longitude'] is double 
-          ? map['longitude'] 
-          : (map['longitude'] != null ? double.tryParse(map['longitude'].toString()) : null),
+      latitude: map['latitude'] is double
+          ? map['latitude']
+          : (map['latitude'] != null
+              ? double.tryParse(map['latitude'].toString())
+              : null),
+      longitude: map['longitude'] is double
+          ? map['longitude']
+          : (map['longitude'] != null
+              ? double.tryParse(map['longitude'].toString())
+              : null),
       sIsSync: map['s_is_sync'] ?? 0,
       trainingStatus: map['training_status'],
       conductTrainingDate: map['conduct_training_date'],
@@ -123,7 +133,11 @@ class TrainingSite {
       createdDate: map['created_date'],
       modifiedDate: map['modified_date'],
       status: map['status'] ?? 'active',
-      offlineId: map['offline_id'] is int ? map['offline_id'] : (map['offline_id'] != null ? int.tryParse(map['offline_id'].toString()) : null),
+      offlineId: map['offline_id'] is int
+          ? map['offline_id']
+          : (map['offline_id'] != null
+              ? int.tryParse(map['offline_id'].toString())
+              : null),
       serverTime: map['server_time'],
     );
   }
@@ -137,18 +151,22 @@ class TrainingSite {
       roadAccess: json['road_access'] ?? 'no',
       villageHeadName: json['village_head_name'],
       gvhName: json['gvh_name'],
-      district: json['district'],
-      traditionalAuthority: json['traditional_authority'],
+      district: _asInt(json['district']),
+      traditionalAuthority: _asInt(json['traditional_authority']),
       totalPeople: json['total_people'],
       houseHoldsCount: json['house_holds_count'],
       cookstovesCount: json['cookstoves_count'],
       houseHoldRadius: json['house_hold_radius'],
-      latitude: json['latitude'] is double 
-          ? json['latitude'] 
-          : (json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null),
-      longitude: json['longitude'] is double 
-          ? json['longitude'] 
-          : (json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null),
+      latitude: json['latitude'] is double
+          ? json['latitude']
+          : (json['latitude'] != null
+              ? double.tryParse(json['latitude'].toString())
+              : null),
+      longitude: json['longitude'] is double
+          ? json['longitude']
+          : (json['longitude'] != null
+              ? double.tryParse(json['longitude'].toString())
+              : null),
       sIsSync: json['s_is_sync'] ?? 0,
       trainingStatus: json['training_status'],
       conductTrainingDate: json['conduct_training_date'],
@@ -158,7 +176,11 @@ class TrainingSite {
       createdDate: json['created_date'],
       modifiedDate: json['modified_date'],
       status: json['status'] ?? 'active',
-      offlineId: json['offline_id'] is int ? json['offline_id'] : (json['offline_id'] != null ? int.tryParse(json['offline_id'].toString()) : null),
+      offlineId: json['offline_id'] is int
+          ? json['offline_id']
+          : (json['offline_id'] != null
+              ? int.tryParse(json['offline_id'].toString())
+              : null),
       serverTime: json['server_time'],
     );
   }
@@ -186,8 +208,8 @@ class TrainingSite {
     String? roadAccess,
     String? villageHeadName,
     String? gvhName,
-    String? district,
-    String? traditionalAuthority,
+    int? district,
+    int? traditionalAuthority,
     int? totalPeople,
     int? houseHoldsCount,
     int? cookstovesCount,
@@ -225,7 +247,8 @@ class TrainingSite {
       sIsSync: sIsSync ?? this.sIsSync,
       trainingStatus: trainingStatus ?? this.trainingStatus,
       conductTrainingDate: conductTrainingDate ?? this.conductTrainingDate,
-      numberOfPeoplePresent: numberOfPeoplePresent ?? this.numberOfPeoplePresent,
+      numberOfPeoplePresent:
+          numberOfPeoplePresent ?? this.numberOfPeoplePresent,
       createdBy: createdBy ?? this.createdBy,
       modifiedBy: modifiedBy ?? this.modifiedBy,
       createdDate: createdDate ?? this.createdDate,

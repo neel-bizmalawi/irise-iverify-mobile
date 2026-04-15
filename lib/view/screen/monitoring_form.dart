@@ -7,13 +7,23 @@ import 'dart:io';
 import 'dart:developer' as developer;
 import '../../data/repositories/beneficiary_repository.dart';
 import '../../data/repositories/monitoring_repository.dart';
+import '../../data/repositories/training_site_repository.dart';
 import '../../data/models/beneficiary.dart';
 import '../../data/models/monitoring.dart';
 import '../../core/utils/image_utils.dart';
 import '../widgets/simple_dropdown.dart';
 
 class MonitoringFormScreen extends StatefulWidget {
-  const MonitoringFormScreen({super.key});
+  final Monitoring? existingMonitoring;
+  final int? offlineId;
+  final int? monitoringId;
+
+  const MonitoringFormScreen({
+    super.key,
+    this.existingMonitoring,
+    this.offlineId,
+    this.monitoringId,
+  });
 
   @override
   State<MonitoringFormScreen> createState() => _MonitoringFormScreenState();
@@ -24,6 +34,7 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
   final _scrollController = ScrollController();
   final BeneficiaryRepository _beneficiaryRepo = BeneficiaryRepository();
   final MonitoringRepository _monitoringRepo = MonitoringRepository();
+  final TrainingSiteRepository _trainingSiteRepo = TrainingSiteRepository();
   final ImagePicker _imagePicker = ImagePicker();
 
   // Controllers
@@ -71,10 +82,16 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  Monitoring? _editingMonitoring;
+  bool get _isEditMode =>
+      widget.existingMonitoring != null ||
+      widget.offlineId != null ||
+      widget.monitoringId != null;
 
   @override
   void initState() {
     super.initState();
+    _editingMonitoring = widget.existingMonitoring;
     _loadBeneficiaries();
     _searchController.addListener(_filterBeneficiaries);
   }
@@ -96,32 +113,151 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
   Future<void> _loadBeneficiaries() async {
     try {
       final beneficiaries = await _beneficiaryRepo.getAll();
-      developer.log('Loaded ${beneficiaries.length} beneficiaries from database', name: 'MonitoringForm');
-      
+      developer.log(
+          'Loaded ${beneficiaries.length} beneficiaries from database',
+          name: 'MonitoringForm');
+
       // Log some sample beneficiaries for debugging
       if (beneficiaries.isNotEmpty) {
         developer.log('Sample beneficiaries:', name: 'MonitoringForm');
-        for (var i = 0; i < (beneficiaries.length > 5 ? 5 : beneficiaries.length); i++) {
+        for (var i = 0;
+            i < (beneficiaries.length > 5 ? 5 : beneficiaries.length);
+            i++) {
           final b = beneficiaries[i];
-          developer.log('  - ${b.firstName} ${b.lastName} (ID: ${b.nationalId})', name: 'MonitoringForm');
+          developer.log(
+              '  - ${b.firstName} ${b.lastName} (ID: ${b.nationalId})',
+              name: 'MonitoringForm');
         }
       }
-      
+
       setState(() {
         _beneficiaries = beneficiaries;
         _filteredBeneficiaries = [];
         _isLoading = false;
       });
+
+      if (_isEditMode) {
+        await _loadExistingMonitoringForEdit();
+      }
     } catch (e) {
       developer.log('Error loading beneficiaries: $e', name: 'MonitoringForm');
       setState(() => _isLoading = false);
     }
   }
 
+  Future<void> _loadExistingMonitoringForEdit() async {
+    Monitoring? monitoring = _editingMonitoring ?? widget.existingMonitoring;
+
+    try {
+      if (monitoring?.offlineId != null || widget.offlineId != null) {
+        monitoring = await _monitoringRepo.getByOfflineId(
+              monitoring?.offlineId ?? widget.offlineId!,
+            ) ??
+            monitoring;
+      }
+
+      if (monitoring == null &&
+          (widget.monitoringId != null || monitoring?.monitoringId != null)) {
+        monitoring = await _monitoringRepo.getById(
+              monitoring?.monitoringId ?? widget.monitoringId!,
+            ) ??
+            monitoring;
+      }
+    } catch (e) {
+      developer.log('Error reloading monitoring for edit: $e',
+          name: 'MonitoringForm');
+    }
+
+    monitoring ??= widget.existingMonitoring;
+    if (monitoring == null) return;
+
+    _editingMonitoring = monitoring;
+    _populateFormForEdit(monitoring);
+  }
+
+  void _populateFormForEdit(Monitoring monitoring) {
+    Beneficiary? matchedBeneficiary;
+
+    for (final beneficiary in _beneficiaries) {
+      final fullName =
+          '${beneficiary.firstName ?? ''} ${beneficiary.lastName ?? ''}'
+              .trim()
+              .toLowerCase();
+
+      if ((monitoring.beneficiaryId != null &&
+              beneficiary.beneficiaryId == monitoring.beneficiaryId) ||
+          ((monitoring.nationalId ?? '').isNotEmpty &&
+              (beneficiary.nationalId ?? '').trim().toLowerCase() ==
+                  (monitoring.nationalId ?? '').trim().toLowerCase()) ||
+          ((monitoring.agentName ?? '').isNotEmpty &&
+              fullName == (monitoring.agentName ?? '').trim().toLowerCase())) {
+        matchedBeneficiary = beneficiary;
+        break;
+      }
+    }
+
+    matchedBeneficiary ??= Beneficiary(
+      beneficiaryId: monitoring.beneficiaryId,
+      nationalId: monitoring.nationalId,
+      firstName: monitoring.agentName,
+      deviceSerialNo: monitoring.deviceSerialNo,
+      latitude: double.tryParse(monitoring.oldGpsLat ?? ''),
+      longitude: double.tryParse(monitoring.oldGpsLng ?? ''),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedBeneficiary = matchedBeneficiary;
+      _searchController.text = matchedBeneficiary != null
+          ? '${matchedBeneficiary.firstName ?? ''} ${matchedBeneficiary.lastName ?? ''}'
+              .trim()
+          : (monitoring.nationalId ?? monitoring.agentName ?? '');
+      _newDeviceSerialNoController.text = monitoring.newDeviceSerialNo ?? '';
+      _timesUsedTodayController.text =
+          monitoring.timesUsedToday?.toString() ?? '';
+      _dailyFuelCostController.text =
+          monitoring.dailyFuelCost?.toString() ?? '';
+      _savings3MonthsController.text =
+          monitoring.savings3Months?.toString() ?? '';
+      _estFuelLast3mealsKgController.text =
+          monitoring.estFuelLast3mealsKg?.toString() ?? '';
+      _trainingTypeController.text = monitoring.trainingType ?? '';
+      _moreVisitsReasonController.text = monitoring.moreVisitsReason ?? '';
+      _hhNameSame = (monitoring.hhNameSame ?? '').toLowerCase() == 'yes';
+      _stovesPresent = (monitoring.stovesPresent ?? '').toLowerCase() == 'yes';
+      _stoveBeingUsed =
+          (monitoring.stoveBeingUsed ?? '').toLowerCase() == 'yes';
+      _stoveCondition = monitoring.stoveCondition;
+      _userSatisfaction = monitoring.userSatisfaction;
+      _fuelType = monitoring.fuelType;
+      _needsTraining = (monitoring.needsTraining ?? '').toLowerCase() == 'yes';
+      _trainingPerformed =
+          (monitoring.trainingPerformed ?? '').toLowerCase() == 'yes';
+      _needsMoreVisits =
+          (monitoring.needsMoreVisits ?? '').toLowerCase() == 'yes';
+      _healthHospitalLess =
+          (monitoring.healthHospitalLess ?? '').toLowerCase() == 'yes';
+      _healthBetterAir =
+          (monitoring.healthBetterAir ?? '').toLowerCase() == 'yes';
+      _latitude = double.tryParse(monitoring.newGpsLat ?? '');
+      _longitude = double.tryParse(monitoring.newGpsLng ?? '');
+      _visitAt = monitoring.visitAt != null
+          ? DateTime.tryParse(monitoring.visitAt!)
+          : null;
+      _cookstoveImagePath = monitoring.photoPath;
+      _cookstoveImage =
+          monitoring.photoPath != null && monitoring.photoPath!.isNotEmpty
+              ? File(monitoring.photoPath!)
+              : null;
+      _filteredBeneficiaries = [];
+    });
+  }
+
   void _filterBeneficiaries() {
     final query = _searchController.text.toLowerCase().trim();
     developer.log('Searching for: "$query"', name: 'MonitoringForm');
-    
+
     setState(() {
       if (query.isEmpty) {
         _filteredBeneficiaries = [];
@@ -134,14 +270,23 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           final nationalId = (b.nationalId ?? '').toLowerCase();
           return fullName.contains(query) || nationalId.contains(query);
         }).toList();
-        developer.log('Found ${_filteredBeneficiaries.length} matching beneficiaries', name: 'MonitoringForm');
-        
+        developer.log(
+            'Found ${_filteredBeneficiaries.length} matching beneficiaries',
+            name: 'MonitoringForm');
+
         // Log first few matches for debugging
         if (_filteredBeneficiaries.isNotEmpty) {
           developer.log('Matches:', name: 'MonitoringForm');
-          for (var i = 0; i < (_filteredBeneficiaries.length > 3 ? 3 : _filteredBeneficiaries.length); i++) {
+          for (var i = 0;
+              i <
+                  (_filteredBeneficiaries.length > 3
+                      ? 3
+                      : _filteredBeneficiaries.length);
+              i++) {
             final b = _filteredBeneficiaries[i];
-            developer.log('  - ${b.firstName} ${b.lastName} (ID: ${b.nationalId})', name: 'MonitoringForm');
+            developer.log(
+                '  - ${b.firstName} ${b.lastName} (ID: ${b.nationalId})',
+                name: 'MonitoringForm');
           }
         }
       }
@@ -154,6 +299,16 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
       _searchController.clear();
       _filteredBeneficiaries = [];
     });
+  }
+
+  Future<String> _getTrainingSiteLabel(Beneficiary beneficiary) async {
+    final trainingSiteId = beneficiary.trainingSite;
+    if (trainingSiteId == null) {
+      return 'N/A';
+    }
+
+    final trainingSite = await _trainingSiteRepo.getById(trainingSiteId);
+    return trainingSite?.trainingSite ?? 'ID $trainingSiteId';
   }
 
   Future<void> _captureGPS() async {
@@ -334,7 +489,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
       if (_timesUsedTodayController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please select how many times the stove was used today'),
+            content:
+                Text('Please select how many times the stove was used today'),
             backgroundColor: Colors.red,
           ),
         );
@@ -426,11 +582,16 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
       setState(() => _isSaving = true);
 
       try {
+        final now = DateTime.now().toIso8601String();
+
         // Create Monitoring object
         final monitoring = Monitoring(
+          offlineId: _editingMonitoring?.offlineId,
+          monitoringId: _editingMonitoring?.monitoringId,
           beneficiaryId: _selectedBeneficiary!.beneficiaryId,
           nationalId: _selectedBeneficiary!.nationalId,
-          agentName: _selectedBeneficiary!.firstName != null && _selectedBeneficiary!.lastName != null
+          agentName: _selectedBeneficiary!.firstName != null &&
+                  _selectedBeneficiary!.lastName != null
               ? '${_selectedBeneficiary!.firstName} ${_selectedBeneficiary!.lastName}'
               : null,
           visitAt: _visitAt?.toIso8601String(),
@@ -439,54 +600,61 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           newGpsLat: _latitude.toString(),
           newGpsLng: _longitude.toString(),
           deviceSerialNo: _selectedBeneficiary!.deviceSerialNo,
-          newDeviceSerialNo: _newDeviceSerialNoController.text.trim().isEmpty 
-              ? null 
+          newDeviceSerialNo: _newDeviceSerialNoController.text.trim().isEmpty
+              ? null
               : _newDeviceSerialNoController.text.trim(),
           hhNameSame: _hhNameSame ? 'Yes' : 'No',
           stovesPresent: _stovesPresent ? 'yes' : 'no',
           stoveBeingUsed: _stoveBeingUsed ? 'yes' : 'no',
-          timesUsedToday: _timesUsedTodayController.text.isEmpty 
-              ? null 
+          timesUsedToday: _timesUsedTodayController.text.isEmpty
+              ? null
               : int.tryParse(_timesUsedTodayController.text),
           stoveCondition: _stoveCondition,
           photoPath: _cookstoveImagePath,
           userSatisfaction: _userSatisfaction,
           fuelType: _fuelType,
-          dailyFuelCost: _dailyFuelCostController.text.isEmpty 
-              ? null 
+          dailyFuelCost: _dailyFuelCostController.text.isEmpty
+              ? null
               : int.tryParse(_dailyFuelCostController.text),
-          savings3Months: _savings3MonthsController.text.isEmpty 
-              ? null 
+          savings3Months: _savings3MonthsController.text.isEmpty
+              ? null
               : int.tryParse(_savings3MonthsController.text),
-          estFuelLast3mealsKg: _estFuelLast3mealsKgController.text.isEmpty 
-              ? null 
+          estFuelLast3mealsKg: _estFuelLast3mealsKgController.text.isEmpty
+              ? null
               : int.tryParse(_estFuelLast3mealsKgController.text),
           needsTraining: _needsTraining ? 'Yes' : 'No',
-          trainingType: _trainingTypeController.text.trim().isEmpty 
-              ? null 
+          trainingType: _trainingTypeController.text.trim().isEmpty
+              ? null
               : _trainingTypeController.text.trim(),
           trainingPerformed: _trainingPerformed ? 'Yes' : 'No',
           needsMoreVisits: _needsMoreVisits ? 'Yes' : 'No',
-          moreVisitsReason: _moreVisitsReasonController.text.trim().isEmpty 
-              ? null 
+          moreVisitsReason: _moreVisitsReasonController.text.trim().isEmpty
+              ? null
               : _moreVisitsReasonController.text.trim(),
           healthHospitalLess: _healthHospitalLess ? 'Yes' : 'No',
           healthBetterAir: _healthBetterAir ? 'Yes' : 'No',
           sIsSync: 0, // Mark as unsynced
-          status: 'active',
-          createdDate: DateTime.now().toIso8601String(),
+          status: _editingMonitoring?.status ?? 'active',
+          createdDate: _editingMonitoring?.createdDate ?? now,
+          modifiedDate: now,
         );
 
         // Save to local database
-        await _monitoringRepo.insert(monitoring);
+        if (_isEditMode) {
+          await _monitoringRepo.update(monitoring);
+        } else {
+          await _monitoringRepo.insert(monitoring);
+        }
 
         setState(() => _isSaving = false);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Monitoring saved successfully!'),
-              backgroundColor: Color(0xFF4CAF50),
+            SnackBar(
+              content: Text(_isEditMode
+                  ? 'Monitoring updated successfully!'
+                  : 'Monitoring saved successfully!'),
+              backgroundColor: const Color(0xFF4CAF50),
             ),
           );
           context.pop(true); // Return true to indicate success
@@ -550,7 +718,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
                       GestureDetector(
@@ -561,9 +730,9 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                           size: 20,
                         ),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Monitoring Form',
+                          _isEditMode ? 'Edit Monitoring' : 'Monitoring Form',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 18,
@@ -652,7 +821,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
             ),
           ),
         ),
-        if (_filteredBeneficiaries.isNotEmpty && _searchController.text.isNotEmpty)
+        if (_filteredBeneficiaries.isNotEmpty &&
+            _searchController.text.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
@@ -673,7 +843,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
               itemBuilder: (context, index) {
                 final beneficiary = _filteredBeneficiaries[index];
                 return ListTile(
-                  title: Text('${beneficiary.firstName} ${beneficiary.lastName}'),
+                  title:
+                      Text('${beneficiary.firstName} ${beneficiary.lastName}'),
                   subtitle: Text('ID: ${beneficiary.nationalId ?? 'N/A'}'),
                   onTap: () => _selectBeneficiary(beneficiary),
                 );
@@ -725,7 +896,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${_selectedBeneficiary!.firstName ?? ''} ${_selectedBeneficiary!.lastName ?? ''}'.trim(),
+                      '${_selectedBeneficiary!.firstName ?? ''} ${_selectedBeneficiary!.lastName ?? ''}'
+                          .trim(),
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
@@ -744,19 +916,30 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-          
+
           // Beneficiary Details
-          _buildDetailRow('National ID', _selectedBeneficiary!.nationalId ?? 'N/A'),
+          _buildDetailRow(
+              'National ID', _selectedBeneficiary!.nationalId ?? 'N/A'),
           const SizedBox(height: 12),
-          _buildDetailRow('Mobile Number', _selectedBeneficiary!.mobileNo ?? 'N/A'),
+          _buildDetailRow(
+              'Mobile Number', _selectedBeneficiary!.mobileNo ?? 'N/A'),
           const SizedBox(height: 12),
-          _buildDetailRow('Training Site', _selectedBeneficiary!.trainingSite ?? 'N/A'),
+          FutureBuilder<String>(
+            future: _getTrainingSiteLabel(_selectedBeneficiary!),
+            builder: (context, snapshot) {
+              final trainingSiteLabel = snapshot.data ?? 'Loading...';
+              return _buildDetailRow('Training Site', trainingSiteLabel);
+            },
+          ),
           const SizedBox(height: 12),
-          _buildDetailRow('Device Serial No', _selectedBeneficiary!.deviceSerialNo ?? 'N/A'),
+          _buildDetailRow('Device Serial No',
+              _selectedBeneficiary!.deviceSerialNo ?? 'N/A'),
           const SizedBox(height: 12),
-          _buildDetailRow('Cooking Method', _selectedBeneficiary!.cookingMethod ?? 'N/A'),
-          
-          if (_selectedBeneficiary!.latitude != null && _selectedBeneficiary!.longitude != null) ...[
+          _buildDetailRow(
+              'Cooking Method', _selectedBeneficiary!.cookingMethod ?? 'N/A'),
+
+          if (_selectedBeneficiary!.latitude != null &&
+              _selectedBeneficiary!.longitude != null) ...[
             const SizedBox(height: 12),
             _buildDetailRow(
               'GPS Location',
@@ -880,9 +1063,12 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
         ),
         const SizedBox(height: 8),
         _buildDropdown(
-          value: _timesUsedTodayController.text.isEmpty ? null : _timesUsedTodayController.text,
+          value: _timesUsedTodayController.text.isEmpty
+              ? null
+              : _timesUsedTodayController.text,
           items: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'],
-          onChanged: (value) => setState(() => _timesUsedTodayController.text = value ?? ''),
+          onChanged: (value) =>
+              setState(() => _timesUsedTodayController.text = value ?? ''),
         ),
         const SizedBox(height: 12),
         RichText(
@@ -909,7 +1095,7 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
 
   Widget _buildTechnicalAssessment() {
     final bool hasImage = _cookstoveImage != null;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -932,10 +1118,12 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        
+
         // Image Preview Container with border
         GestureDetector(
-          onTap: hasImage ? () => _showImagePreview(context, _cookstoveImage) : null,
+          onTap: hasImage
+              ? () => _showImagePreview(context, _cookstoveImage)
+              : null,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -960,13 +1148,15 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                   child: hasImage
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(_cookstoveImage!, fit: BoxFit.cover),
+                          child:
+                              Image.file(_cookstoveImage!, fit: BoxFit.cover),
                         )
                       : Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+                              Icon(Icons.image,
+                                  size: 48, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
                               Text(
                                 'No image captured',
@@ -983,7 +1173,8 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                 if (hasImage)
                   IgnorePointer(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(8),
@@ -1002,9 +1193,9 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Take Photo / Retake Button (full width)
         SizedBox(
           width: double.infinity,
@@ -1016,14 +1207,15 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
           ),
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Remove Button (only show if image exists)
         if (hasImage) ...[
           SizedBox(
@@ -1047,13 +1239,14 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                 foregroundColor: const Color(0xFF4CAF50),
                 side: const BorderSide(color: Color(0xFF4CAF50)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
           const SizedBox(height: 12),
         ],
-        
+
         // Info message
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1072,7 +1265,7 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
 
   void _showImagePreview(BuildContext context, File? localImage) {
     if (localImage == null) return;
-    
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1108,7 +1301,10 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
         RichText(
           text: const TextSpan(
             text: 'User Satisfaction/feedback',
-            style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600),
             children: [
               TextSpan(
                 text: ' *',
@@ -1173,29 +1369,30 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: _dailyFuelCostController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: 'Enter daily fuel cost',
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Daily fuel cost is required';
-            }
-            return null;
-          },
+        _buildDropdown(
+          value: _dailyFuelCostController.text.isEmpty
+              ? null
+              : _dailyFuelCostController.text,
+          items: const [
+            '500',
+            '1000',
+            '1500',
+            '2000',
+            '2500',
+            '3000',
+            '3500',
+            '4000',
+            '4500',
+            '5000',
+          ],
+          onChanged: (value) =>
+              setState(() => _dailyFuelCostController.text = value ?? ''),
         ),
         const SizedBox(height: 12),
         RichText(
           text: const TextSpan(
-            text: 'Please indicate how much you have saved over 3 months of using the e-cookstoves (MK in Thousands)',
+            text:
+                'Please indicate how much you have saved over 3 months of using the e-cookstoves (MK in Thousands)',
             style: TextStyle(fontSize: 13, color: Colors.black87),
             children: [
               TextSpan(
@@ -1206,24 +1403,13 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: _savings3MonthsController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: 'Enter savings amount',
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Savings amount is required';
-            }
-            return null;
-          },
+        _buildDropdown(
+          value: _savings3MonthsController.text.isEmpty
+              ? null
+              : _savings3MonthsController.text,
+          items: const ['20', '40', '60', '80', '100'],
+          onChanged: (value) =>
+              setState(() => _savings3MonthsController.text = value ?? ''),
         ),
         const SizedBox(height: 12),
         RichText(
@@ -1239,24 +1425,25 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: _estFuelLast3mealsKgController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: 'Enter estimated fuel in KG',
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+        _buildDropdown(
+          value: _estFuelLast3mealsKgController.text.isEmpty
+              ? null
+              : _estFuelLast3mealsKgController.text,
+          items: const [
+            '1',
+            '2',
+            '3',
+            '4',
+            '5',
+            '6',
+            '7',
+            '8',
+            '9',
+            '10',
+          ],
+          onChanged: (value) => setState(
+            () => _estFuelLast3mealsKgController.text = value ?? '',
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Estimated fuel is required';
-            }
-            return null;
-          },
         ),
       ],
     );
@@ -1283,17 +1470,17 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
         ),
         if (_needsTraining) ...[
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _trainingTypeController,
-            decoration: InputDecoration(
-              hintText: 'Specify training type',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
+          _buildDropdown(
+            value: _trainingTypeController.text.isEmpty
+                ? null
+                : _trainingTypeController.text,
+            items: const [
+              'Usage',
+              'How to fire',
+              'Preventative maintenance',
+            ],
+            onChanged: (value) =>
+                setState(() => _trainingTypeController.text = value ?? ''),
           ),
           const SizedBox(height: 12),
           _buildToggle(
@@ -1310,16 +1497,13 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
         ),
         if (_needsMoreVisits) ...[
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _moreVisitsReasonController,
-            decoration: InputDecoration(
-              hintText: 'Specify reason for more visits',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+          _buildDropdown(
+            value: _moreVisitsReasonController.text.isEmpty
+                ? null
+                : _moreVisitsReasonController.text,
+            items: const ['weekly', 'Monthly'],
+            onChanged: (value) => setState(
+              () => _moreVisitsReasonController.text = value ?? '',
             ),
           ),
         ],
@@ -1385,8 +1569,10 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
             ),
             ElevatedButton.icon(
               onPressed: _captureGPS,
-              icon: const Icon(Icons.my_location, color: Colors.white, size: 18),
-              label: const Text('Capture GPS', style: TextStyle(color: Colors.white)),
+              icon:
+                  const Icon(Icons.my_location, color: Colors.white, size: 18),
+              label: const Text('Capture GPS',
+                  style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 shape: RoundedRectangleBorder(
@@ -1454,9 +1640,9 @@ class _MonitoringFormScreenState extends State<MonitoringFormScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-              : const Text(
-                  'Save Monitoring',
-                  style: TextStyle(
+              : Text(
+                  _isEditMode ? 'Update Monitoring' : 'Save Monitoring',
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,

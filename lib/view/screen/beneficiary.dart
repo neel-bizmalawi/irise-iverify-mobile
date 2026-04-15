@@ -7,6 +7,7 @@ import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
 import 'package:irise/data/services/data_service.dart';
 import 'package:irise/core/services/connectivity_service.dart';
+import 'dart:async';
 import 'dart:developer' as developer;
 
 class BeneficiaryListScreen extends StatefulWidget {
@@ -16,24 +17,35 @@ class BeneficiaryListScreen extends StatefulWidget {
   State<BeneficiaryListScreen> createState() => _BeneficiaryListScreenState();
 }
 
-class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with WidgetsBindingObserver {
+class _BeneficiaryListScreenState extends State<BeneficiaryListScreen>
+    with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final _beneficiaryRepo = BeneficiaryRepository();
   final _dataService = DataService();
-  
+  static const int _pageSize = 30;
+
   String _searchQuery = '';
   List<Beneficiary> _beneficiaries = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   bool _hasLoadedOnce = false;
   bool _hasInitialFetch = false;
   bool _allTrainingSitesSynced = true;
   int _unsyncedTrainingSitesCount = 0;
+  int _offset = 0;
+  int _totalCount = 0;
+  int _syncedCount = 0;
+  int _unsyncedCount = 0;
+  int _matchingCount = 0;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scrollController.addListener(_onScroll);
     _checkInitialFetch();
     _checkTrainingSitesStatus();
   }
@@ -43,26 +55,37 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
     super.didChangeAppLifecycleState(state);
     // Reload when app comes to foreground
     if (state == AppLifecycleState.resumed && _hasLoadedOnce) {
-      developer.log('App resumed, reloading beneficiaries...', name: 'BeneficiaryList');
-      _loadBeneficiaries();
+      developer.log('App resumed, reloading beneficiaries...',
+          name: 'BeneficiaryList');
+      _resetAndLoadBeneficiaries();
     }
   }
-  
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isLoading || _isLoadingMore) return;
+
+    final threshold = _scrollController.position.maxScrollExtent - 200;
+    if (_scrollController.position.pixels >= threshold && _hasMore) {
+      _loadMoreBeneficiaries();
+    }
+  }
+
   Future<void> _checkInitialFetch() async {
     setState(() => _isLoading = true);
     try {
       // Check if there are any beneficiaries in the database
-      final beneficiaries = await _beneficiaryRepo.getAll();
+      final count = await _beneficiaryRepo.getCount();
       setState(() {
-        _hasInitialFetch = beneficiaries.isNotEmpty;
+        _hasInitialFetch = count > 0;
         _isLoading = false;
       });
-      
+
       if (_hasInitialFetch) {
-        _loadBeneficiaries();
+        _resetAndLoadBeneficiaries();
       }
     } catch (e) {
-      developer.log('Error checking initial fetch: $e', name: 'BeneficiaryList');
+      developer.log('Error checking initial fetch: $e',
+          name: 'BeneficiaryList');
       setState(() => _isLoading = false);
     }
   }
@@ -72,15 +95,18 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
       final unsyncedCount = await trainingSiteRepo.getUnsyncedCount();
-      
+
       setState(() {
         _allTrainingSitesSynced = allSynced;
         _unsyncedTrainingSitesCount = unsyncedCount;
       });
-      
-      developer.log('Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount', name: 'BeneficiaryList');
+
+      developer.log(
+          'Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount',
+          name: 'BeneficiaryList');
     } catch (e) {
-      developer.log('Error checking training sites status: $e', name: 'BeneficiaryList');
+      developer.log('Error checking training sites status: $e',
+          name: 'BeneficiaryList');
     }
   }
 
@@ -91,68 +117,49 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
     // This ensures we pick up any changes made in other screens (like EditHouseholdScreen)
     final route = ModalRoute.of(context);
     if (route != null && route.isCurrent && _hasLoadedOnce) {
-      developer.log('Screen became active, reloading beneficiaries...', name: 'BeneficiaryList');
+      developer.log('Screen became active, reloading beneficiaries...',
+          name: 'BeneficiaryList');
       // Use Future.microtask to avoid calling setState during build
       Future.microtask(() {
-        _loadBeneficiaries();
+        _resetAndLoadBeneficiaries();
         _checkTrainingSitesStatus();
       });
     }
   }
 
-  Future<void> _loadBeneficiaries() async {
-    setState(() => _isLoading = true);
+  Future<void> _refreshCounts() async {
     try {
-      developer.log('Loading beneficiaries from database...', name: 'BeneficiaryList');
-      final beneficiaries = await _beneficiaryRepo.getAll();
-      developer.log('Loaded ${beneficiaries.length} beneficiaries', name: 'BeneficiaryList');
-      
-      // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
-      // Within NOT SYNCED group: sort by offline_id descending (newest first)
-      // Within SYNCED group: sort by beneficiary_id descending (newest first)
-      beneficiaries.sort((a, b) {
-        final aSync = a.sIsSync ?? 0;
-        final bSync = b.sIsSync ?? 0;
-        
-        // If sync status is different, unsynced (0) comes first
-        if (aSync != bSync) {
-          return aSync.compareTo(bSync);
-        }
-        
-        // If both are NOT SYNCED (s_is_sync = 0), sort by offline_id descending
-        if (aSync == 0 && bSync == 0) {
-          final aOfflineId = a.offlineId ?? 0;
-          final bOfflineId = b.offlineId ?? 0;
-          return bOfflineId.compareTo(aOfflineId); // Higher offline_id first (newest)
-        }
-        
-        // If both are SYNCED (s_is_sync = 1), sort by beneficiary_id descending
-        final aBeneficiaryId = a.beneficiaryId ?? 0;
-        final bBeneficiaryId = b.beneficiaryId ?? 0;
-        return bBeneficiaryId.compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
-      });
-      
-      // Log first few beneficiaries for debugging
-      if (beneficiaries.isNotEmpty) {
-        developer.log('========================================', name: 'BeneficiaryList');
-        developer.log('Top beneficiaries after sorting (NOT SYNCED by offline_id DESC, then SYNCED by beneficiary_id DESC):', name: 'BeneficiaryList');
-        for (var i = 0; i < (beneficiaries.length > 5 ? 5 : beneficiaries.length); i++) {
-          final b = beneficiaries[i];
-          developer.log(
-            '[$i] ${b.firstName} ${b.lastName} | offline_id: ${b.offlineId} | beneficiary_id: ${b.beneficiaryId} | Synced: ${b.sIsSync == 1 ? 'YES' : 'NO'}',
-            name: 'BeneficiaryList',
-          );
-        }
-        developer.log('========================================', name: 'BeneficiaryList');
-      }
-      
+      final results = await Future.wait([
+        _beneficiaryRepo.getCount(),
+        _beneficiaryRepo.getSyncedCount(),
+        _beneficiaryRepo.getUnsyncedCount(),
+        _beneficiaryRepo.getFilteredCount(searchQuery: _searchQuery),
+      ]);
+
       setState(() {
-        _beneficiaries = beneficiaries;
-        _isLoading = false;
-        _hasLoadedOnce = true;
+        _totalCount = results[0];
+        _syncedCount = results[1];
+        _unsyncedCount = results[2];
+        _matchingCount = results[3];
       });
     } catch (e) {
-      developer.log('Error loading beneficiaries: $e', name: 'BeneficiaryList');
+      developer.log('Error refreshing counts: $e', name: 'BeneficiaryList');
+    }
+  }
+
+  Future<void> _resetAndLoadBeneficiaries() async {
+    setState(() {
+      _isLoading = true;
+      _isLoadingMore = false;
+      _hasMore = true;
+      _offset = 0;
+      _beneficiaries = [];
+    });
+
+    await _refreshCounts();
+    await _loadMoreBeneficiaries();
+
+    if (mounted) {
       setState(() {
         _isLoading = false;
         _hasLoadedOnce = true;
@@ -160,16 +167,42 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
     }
   }
 
-  List<Beneficiary> get _filtered => _beneficiaries
-      .where((e) =>
-          (e.firstName ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (e.lastName ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (e.nationalId ?? '').toLowerCase().contains(_searchQuery.toLowerCase()))
-      .toList();
+  Future<void> _loadMoreBeneficiaries() async {
+    if (_isLoadingMore || !_hasMore) return;
 
-  int get _totalCount => _beneficiaries.length;
-  int get _syncedCount => _beneficiaries.where((b) => b.sIsSync == 1).length;
-  int get _unsyncedCount => _beneficiaries.where((b) => b.sIsSync == 0).length;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final page = await _beneficiaryRepo.getPaged(
+        limit: _pageSize,
+        offset: _offset,
+        searchQuery: _searchQuery,
+      );
+
+      setState(() {
+        _beneficiaries.addAll(page);
+        _offset += page.length;
+        _hasMore = page.length == _pageSize;
+      });
+    } catch (e) {
+      developer.log('Error loading more beneficiaries: $e',
+          name: 'BeneficiaryList');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchQuery = value;
+      });
+      _resetAndLoadBeneficiaries();
+    });
+  }
 
   Future<void> _syncBeneficiary(Beneficiary beneficiary) async {
     // Check internet connectivity first
@@ -178,7 +211,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Internet is off. Please connect to the internet to sync.'),
+            content: Text(
+                'Internet is off. Please connect to the internet to sync.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -186,12 +220,12 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       }
       return;
     }
-    
+
     // CRITICAL: Check if ALL training sites are synced before allowing beneficiary sync
     try {
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
-      
+
       if (!allSynced) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +241,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
         return;
       }
     } catch (e) {
-      developer.log('Error checking training sites sync status: $e', name: 'BeneficiaryList');
+      developer.log('Error checking training sites sync status: $e',
+          name: 'BeneficiaryList');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -219,26 +254,26 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       }
       return;
     }
-    
+
     // Additional check: Verify the specific training site for this beneficiary is synced
-    if (beneficiary.trainingSite != null && beneficiary.trainingSite!.isNotEmpty) {
+    if (beneficiary.trainingSite != null) {
       try {
         final trainingSiteRepo = TrainingSiteRepository();
-        final allTrainingSites = await trainingSiteRepo.getAll();
-        
-        // Find the training site by name
-        final trainingSite = allTrainingSites.firstWhere(
-          (site) => site.trainingSite == beneficiary.trainingSite,
-          orElse: () => throw Exception('Training site not found'),
-        );
-        
+        final trainingSite =
+            await trainingSiteRepo.getById(beneficiary.trainingSite!);
+        if (trainingSite == null) {
+          throw Exception('Training site not found');
+        }
+        final trainingSiteLabel =
+            trainingSite.trainingSite ?? 'ID ${beneficiary.trainingSite}';
+
         // Double-check if this specific training site is synced
         if (trainingSite.sIsSync == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Cannot sync beneficiary. The training site "${beneficiary.trainingSite}" is not synced yet.',
+                  'Cannot sync beneficiary. The training site "$trainingSiteLabel" is not synced yet.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 5),
@@ -248,11 +283,13 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           return;
         }
       } catch (e) {
-        developer.log('Error checking specific training site sync status: $e', name: 'BeneficiaryList');
+        developer.log('Error checking specific training site sync status: $e',
+            name: 'BeneficiaryList');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Training site "${beneficiary.trainingSite}" not found.'),
+              content: Text(
+                  'Error: Training site ID ${beneficiary.trainingSite} not found.'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -261,10 +298,12 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
         return;
       }
     }
-    
+
     try {
-      developer.log('Syncing beneficiary: ${beneficiary.firstName} ${beneficiary.lastName}', name: 'BeneficiaryList');
-      
+      developer.log(
+          'Syncing beneficiary: ${beneficiary.firstName} ${beneficiary.lastName}',
+          name: 'BeneficiaryList');
+
       // Show loading dialog
       if (mounted) {
         showDialog(
@@ -277,78 +316,96 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           ),
         );
       }
-      
+
       // Convert beneficiary to JSON for sync
       final beneficiaryJson = beneficiary.toJsonForSync();
-      
+
       // Sync to server using beneficiaryBeneSync
       final response = await _dataService.beneficiaryBeneSync(
         beneficiaries: [beneficiaryJson],
       );
-      
+
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
-      
+
       if (response.success) {
-        developer.log('========================================', name: 'BeneficiaryList');
-        developer.log('Beneficiary synced successfully', name: 'BeneficiaryList');
-        developer.log('Response data: ${response.data}', name: 'BeneficiaryList');
-        developer.log('Current beneficiary - beneficiary_id: ${beneficiary.beneficiaryId}, offline_id: ${beneficiary.offlineId}, s_is_sync: ${beneficiary.sIsSync}', name: 'BeneficiaryList');
-        
+        developer.log('========================================',
+            name: 'BeneficiaryList');
+        developer.log('Beneficiary synced successfully',
+            name: 'BeneficiaryList');
+        developer.log('Response data: ${response.data}',
+            name: 'BeneficiaryList');
+        developer.log(
+            'Current beneficiary - beneficiary_id: ${beneficiary.beneficiaryId}, offline_id: ${beneficiary.offlineId}, s_is_sync: ${beneficiary.sIsSync}',
+            name: 'BeneficiaryList');
+
         // Try to extract beneficiary_id from response
         int? beneficiaryId;
-        
+
         if (response.data != null) {
           // Response format: {success: true, action: created/updated, beneficiary_id: 94, message: ...}
           if (response.data!['beneficiary_id'] != null) {
             beneficiaryId = response.data!['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in response: $beneficiaryId', name: 'BeneficiaryList');
+            developer.log('Found beneficiary_id in response: $beneficiaryId',
+                name: 'BeneficiaryList');
           } else if (response.data!['data'] is Map) {
             // Alternative format: {success: true, data: {beneficiary_id: 94}}
             final dataMap = response.data!['data'] as Map;
             beneficiaryId = dataMap['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in data map: $beneficiaryId', name: 'BeneficiaryList');
+            developer.log('Found beneficiary_id in data map: $beneficiaryId',
+                name: 'BeneficiaryList');
           } else if (response.data!['data'] is List) {
             // Alternative format: {success: true, data: [{beneficiary_id: 94}]}
             final mappings = response.data!['data'] as List;
             if (mappings.isNotEmpty) {
               final mapping = mappings.first;
               beneficiaryId = mapping['beneficiary_id'] as int?;
-              developer.log('Found beneficiary_id in data list: $beneficiaryId', name: 'BeneficiaryList');
+              developer.log('Found beneficiary_id in data list: $beneficiaryId',
+                  name: 'BeneficiaryList');
             }
           }
         }
-        
+
         // Always mark as synced after successful sync
-        developer.log('Marking beneficiary as synced...', name: 'BeneficiaryList');
-        
-        if (beneficiary.offlineId != null && beneficiaryId != null && beneficiary.beneficiaryId == null) {
+        developer.log('Marking beneficiary as synced...',
+            name: 'BeneficiaryList');
+
+        if (beneficiary.offlineId != null &&
+            beneficiaryId != null &&
+            beneficiary.beneficiaryId == null) {
           // Has offline_id, got beneficiary_id from server, and doesn't already have beneficiary_id - update with server ID
-          developer.log('Updating offline_id ${beneficiary.offlineId} with server beneficiary_id: $beneficiaryId', name: 'BeneficiaryList');
-          await _beneficiaryRepo.updateWithServerId(beneficiary.offlineId!, beneficiaryId);
+          developer.log(
+              'Updating offline_id ${beneficiary.offlineId} with server beneficiary_id: $beneficiaryId',
+              name: 'BeneficiaryList');
+          await _beneficiaryRepo.updateWithServerId(
+              beneficiary.offlineId!, beneficiaryId);
         } else {
           // Already has beneficiary_id or no beneficiary_id in response - just mark as synced
-          developer.log('Marking as synced (beneficiary_id: ${beneficiary.beneficiaryId ?? beneficiaryId})', name: 'BeneficiaryList');
+          developer.log(
+              'Marking as synced (beneficiary_id: ${beneficiary.beneficiaryId ?? beneficiaryId})',
+              name: 'BeneficiaryList');
           final updatedBeneficiary = beneficiary.copyWith(
             sIsSync: 1,
             beneficiaryId: beneficiaryId ?? beneficiary.beneficiaryId,
           );
           await _beneficiaryRepo.update(updatedBeneficiary);
         }
-        
-        developer.log('Update complete, reloading beneficiaries...', name: 'BeneficiaryList');
-        developer.log('========================================', name: 'BeneficiaryList');
-        
+
+        developer.log('Update complete, reloading beneficiaries...',
+            name: 'BeneficiaryList');
+        developer.log('========================================',
+            name: 'BeneficiaryList');
+
         // Force a complete state refresh
         if (mounted) {
           setState(() {
             _isLoading = true;
           });
         }
-        
+
         // Reload beneficiaries
-        await _loadBeneficiaries();
-        
+        await _resetAndLoadBeneficiaries();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -369,12 +426,12 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
       }
     } catch (e) {
       developer.log('Error syncing beneficiary: $e', name: 'BeneficiaryList');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -389,8 +446,10 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _scrollController.removeListener(_onScroll);
     _searchController.dispose();
     _scrollController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -423,12 +482,15 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
           // ── Add User FAB ──
           FloatingActionButton.extended(
             heroTag: 'add_user',
-            onPressed: _hasInitialFetch ? () async {
-              await context.push(AppRoutes.beneficiary_registration);
-              // Reload the list after returning from registration
-              _loadBeneficiaries();
-            } : null,
-            backgroundColor: _hasInitialFetch ? const Color(0xFF4CAF50) : Colors.grey,
+            onPressed: _hasInitialFetch
+                ? () async {
+                    await context.push(AppRoutes.beneficiary_registration);
+                    // Reload the list after returning from registration
+                    _resetAndLoadBeneficiaries();
+                  }
+                : null,
+            backgroundColor:
+                _hasInitialFetch ? const Color(0xFF4CAF50) : Colors.grey,
             icon: const Icon(Icons.add, color: Colors.white),
             label: const Text(
               'Add Beneficiary',
@@ -491,7 +553,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -515,7 +578,7 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                     child: TextField(
                       controller: _searchController,
                       cursorColor: Colors.green,
-                      onChanged: (val) => setState(() => _searchQuery = val),
+                      onChanged: _onSearchChanged,
                       decoration: const InputDecoration(
                         hintText: 'Search by Name or National ID...',
                         hintStyle:
@@ -553,7 +616,7 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                   ),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // ── Warning banner if training sites are not all synced ──
                 if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
                   Padding(
@@ -605,9 +668,9 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                   ),
                 if (!_allTrainingSitesSynced && _unsyncedTrainingSitesCount > 0)
                   const SizedBox(height: 12),
-                
+
                 // ── Records loaded indicator ──
-                if (_filtered.isNotEmpty)
+                if (_beneficiaries.isNotEmpty)
                   Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -617,7 +680,7 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '• ${_filtered.length}/${_totalCount} Records Loaded',
+                        '• ${_beneficiaries.length}/$_matchingCount Records Loaded',
                         style: const TextStyle(
                           color: Color(0xFF4CAF50),
                           fontSize: 12,
@@ -633,7 +696,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                   child: _isLoading
                       ? const Center(
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF4CAF50)),
                           ),
                         )
                       : !_hasInitialFetch
@@ -641,7 +705,8 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.cloud_download, size: 64, color: Colors.grey.shade300),
+                                  Icon(Icons.cloud_download,
+                                      size: 64, color: Colors.grey.shade300),
                                   const SizedBox(height: 16),
                                   Text(
                                     'Please fetch data from server first',
@@ -661,36 +726,56 @@ class _BeneficiaryListScreenState extends State<BeneficiaryListScreen> with Widg
                                 ],
                               ),
                             )
-                          : _filtered.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.person_off, size: 64, color: Colors.grey.shade300),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No beneficiaries found',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey.shade600,
-                                    ),
+                          : _beneficiaries.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.person_off,
+                                          size: 64,
+                                          color: Colors.grey.shade300),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'No beneficiaries found',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            )
-                          : ListView.separated(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                              itemCount: _filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final beneficiary = _filtered[index];
-                                return _BeneficiaryCard(
-                                  beneficiary: beneficiary,
-                                  onSync: () => _syncBeneficiary(beneficiary),
-                                );
-                              },
-                            ),
+                                )
+                              : ListView.separated(
+                                  controller: _scrollController,
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                                  itemCount: _beneficiaries.length +
+                                      (_isLoadingMore ? 1 : 0),
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (context, index) {
+                                    if (index >= _beneficiaries.length) {
+                                      return const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            vertical: 12.0),
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFF4CAF50)),
+                                          ),
+                                        ),
+                                      );
+                                    }
+
+                                    final beneficiary = _beneficiaries[index];
+                                    return _BeneficiaryCard(
+                                      beneficiary: beneficiary,
+                                      onSync: () =>
+                                          _syncBeneficiary(beneficiary),
+                                    );
+                                  },
+                                ),
                 ),
               ],
             ),
@@ -763,190 +848,202 @@ class _BeneficiaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final synced = beneficiary.sIsSync == 1;
-    final name = '${beneficiary.firstName ?? ''} ${beneficiary.lastName ?? ''}'.trim();
+    final name =
+        '${beneficiary.firstName ?? ''} ${beneficiary.lastName ?? ''}'.trim();
     final nationalId = beneficiary.nationalId ?? 'N/A';
-    
+
     // Check for missing required fields from BeneficiaryRegistrationScreen
     final List<String> missing = [];
-    if (beneficiary.trainingSite == null || beneficiary.trainingSite!.isEmpty) missing.add('Training Site');
-    if (beneficiary.firstName == null || beneficiary.firstName!.isEmpty) missing.add('First Name');
-    if (beneficiary.lastName == null || beneficiary.lastName!.isEmpty) missing.add('Last Name');
-    if (beneficiary.mobileNo == null || beneficiary.mobileNo!.isEmpty) missing.add('Mobile Number');
-    if (beneficiary.nationalId == null || beneficiary.nationalId!.isEmpty) missing.add('National ID');
+    if (beneficiary.trainingSite == null) missing.add('Training Site');
+    if (beneficiary.firstName == null || beneficiary.firstName!.isEmpty)
+      missing.add('First Name');
+    if (beneficiary.lastName == null || beneficiary.lastName!.isEmpty)
+      missing.add('Last Name');
+    if (beneficiary.mobileNo == null || beneficiary.mobileNo!.isEmpty)
+      missing.add('Mobile Number');
+    if (beneficiary.nationalId == null || beneficiary.nationalId!.isEmpty)
+      missing.add('National ID');
     if (beneficiary.femalesBelow18 == null) missing.add('Females -18');
     if (beneficiary.femalesAbove18 == null) missing.add('Females +18');
     if (beneficiary.malesBelow18 == null) missing.add('Males -18');
     if (beneficiary.malesAbove18 == null) missing.add('Males +18');
-    if (beneficiary.cookingMethod == null || beneficiary.cookingMethod!.isEmpty) missing.add('Cooking Method');
-    if (beneficiary.language == null || beneficiary.language!.isEmpty) missing.add('Preferred Language');
-    if (beneficiary.nationalIdAttachment == null || beneficiary.nationalIdAttachment!.isEmpty) missing.add('National ID Image');
-    if (beneficiary.signature == null || beneficiary.signature!.isEmpty) missing.add('Signature');
+    if (beneficiary.cookingMethod == null || beneficiary.cookingMethod!.isEmpty)
+      missing.add('Cooking Method');
+    if (beneficiary.language == null || beneficiary.language!.isEmpty)
+      missing.add('Preferred Language');
+    if (beneficiary.nationalIdAttachment == null ||
+        beneficiary.nationalIdAttachment!.isEmpty)
+      missing.add('National ID Image');
+    if (beneficiary.signature == null || beneficiary.signature!.isEmpty)
+      missing.add('Signature');
 
     return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border(
-            left: BorderSide(
-              color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
-              width: 5,
-            ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border(
+          left: BorderSide(
+            color: synced ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+            width: 5,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Avatar ──
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    color: Color(0xFF4CAF50),
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // ── Info ──
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name.isNotEmpty ? name : 'Unknown',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          _SyncBadge(
+                            synced: synced,
+                            onTap: synced ? null : onSync,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      if (beneficiary.beneficiaryId != null)
+                        Text(
+                          'USER ID: ${beneficiary.beneficiaryId}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      if (beneficiary.offlineId != null &&
+                          beneficiary.beneficiaryId == null)
+                        Text(
+                          'OFFLINE ID: ${beneficiary.offlineId}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'NATIONAL ID: $nationalId',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                          // Edit Icon - show if NOT synced OR if there are missing fields
+                          if (beneficiary.sIsSync == 0 || missing.isNotEmpty)
+                            GestureDetector(
+                              onTap: () async {
+                                // Navigate to edit screen
+                                // CRITICAL: Use prefixed format to prevent ID collision
+                                // b_ prefix = beneficiary_id (server), o_ prefix = offline_id (local)
+                                final idParam =
+                                    beneficiary.beneficiaryId != null
+                                        ? 'b_${beneficiary.beneficiaryId}'
+                                        : 'o_${beneficiary.offlineId}';
+                                await context.push(
+                                  '${AppRoutes.beneficiary_registration}?beneficiaryId=$idParam',
+                                );
+                              },
+                              child: const Icon(
+                                Icons.edit_note,
+                                color: Colors.black54,
+                                size: 24,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Missing tags ──
+            if (missing.isNotEmpty) ...[
+              Divider(),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
-                  // ── Avatar ──
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Color(0xFF4CAF50),
-                      size: 28,
+                  const Text(
+                    '• MISSING:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
                     ),
                   ),
-                  const SizedBox(width: 12),
-
-                  // ── Info ──
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name.isNotEmpty ? name : 'Unknown',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                            _SyncBadge(
-                              synced: synced,
-                              onTap: synced ? null : onSync,
-                            ),
-                          ],
+                  ...missing.map(
+                    (tag) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE4E8),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        tag,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFFE91E63),
+                          fontWeight: FontWeight.w500,
                         ),
-                        const SizedBox(height: 4),
-                        if (beneficiary.beneficiaryId != null)
-                          Text(
-                            'USER ID: ${beneficiary.beneficiaryId}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        if (beneficiary.offlineId != null && beneficiary.beneficiaryId == null)
-                          Text(
-                            'OFFLINE ID: ${beneficiary.offlineId}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'NATIONAL ID: $nationalId',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                            ),
-                            // Edit Icon - show if NOT synced OR if there are missing fields
-                            if (beneficiary.sIsSync == 0 || missing.isNotEmpty)
-                              GestureDetector(
-                                onTap: () async {
-                                  // Navigate to edit screen
-                                  // CRITICAL: Use prefixed format to prevent ID collision
-                                  // b_ prefix = beneficiary_id (server), o_ prefix = offline_id (local)
-                                  final idParam = beneficiary.beneficiaryId != null
-                                      ? 'b_${beneficiary.beneficiaryId}'
-                                      : 'o_${beneficiary.offlineId}';
-                                  await context.push(
-                                    '${AppRoutes.beneficiary_registration}?beneficiaryId=$idParam',
-                                  );
-                                },
-                                child: const Icon(
-                                  Icons.edit_note,
-                                  color: Colors.black54,
-                                  size: 24,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
-
-              // ── Missing tags ──
-              if (missing.isNotEmpty) ...[
-                Divider(),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    const Text(
-                      '• MISSING:',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                    ...missing.map(
-                      (tag) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE4E8),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          tag,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFFE91E63),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ],
-          ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -955,7 +1052,7 @@ class _BeneficiaryCard extends StatelessWidget {
 class _SyncBadge extends StatelessWidget {
   final bool synced;
   final VoidCallback? onTap;
-  
+
   const _SyncBadge({
     required this.synced,
     this.onTap,

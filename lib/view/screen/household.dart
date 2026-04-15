@@ -21,7 +21,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   final ScrollController _scrollController = ScrollController();
   final BeneficiaryRepository _beneficiaryRepo = BeneficiaryRepository();
   final DataService _dataService = DataService();
-  
+
   bool _showScrollToTop = false;
   bool _isLoading = true;
   bool _hasLoadedOnce = false;
@@ -44,7 +44,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
     super.didChangeDependencies();
     // Reload data when returning to this screen (but not on first load)
     if (_hasLoadedOnce && ModalRoute.of(context)?.isCurrent == true) {
-      developer.log('Screen became active, reloading households...', name: 'HouseholdScreen');
+      developer.log('Screen became active, reloading households...',
+          name: 'HouseholdScreen');
       _loadHouseholds();
       _checkTrainingSitesStatus();
     }
@@ -55,60 +56,74 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
       final unsyncedCount = await trainingSiteRepo.getUnsyncedCount();
-      
+
+      if (!mounted) return;
+
       setState(() {
         _allTrainingSitesSynced = allSynced;
         _unsyncedTrainingSitesCount = unsyncedCount;
       });
-      
-      developer.log('Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount', name: 'HouseholdScreen');
+
+      developer.log(
+          'Training sites sync status: allSynced=$allSynced, unsyncedCount=$unsyncedCount',
+          name: 'HouseholdScreen');
     } catch (e) {
-      developer.log('Error checking training sites status: $e', name: 'HouseholdScreen');
+      developer.log('Error checking training sites status: $e',
+          name: 'HouseholdScreen');
     }
   }
 
   Future<void> _loadHouseholds() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      developer.log('Loading households from database...', name: 'HouseholdScreen');
+      developer.log('Loading households from database...',
+          name: 'HouseholdScreen');
       final beneficiaries = await _beneficiaryRepo.getAll();
-      developer.log('Loaded ${beneficiaries.length} households', name: 'HouseholdScreen');
-      
+      developer.log('Loaded ${beneficiaries.length} households',
+          name: 'HouseholdScreen');
+
+      if (!mounted) return;
+
       // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
       // Within NOT SYNCED group: sort by offline_id descending (newest first)
       // Within SYNCED group: sort by beneficiary_id descending (newest first)
       beneficiaries.sort((a, b) {
         final aSync = a.sIsSync ?? 0;
         final bSync = b.sIsSync ?? 0;
-        
+
         // If sync status is different, unsynced (0) comes first
         if (aSync != bSync) {
           return aSync.compareTo(bSync);
         }
-        
+
         // If both are NOT SYNCED (s_is_sync = 0), sort by offline_id descending
         if (aSync == 0 && bSync == 0) {
           final aOfflineId = a.offlineId ?? 0;
           final bOfflineId = b.offlineId ?? 0;
-          return bOfflineId.compareTo(aOfflineId); // Higher offline_id first (newest)
+          return bOfflineId
+              .compareTo(aOfflineId); // Higher offline_id first (newest)
         }
-        
+
         // If both are SYNCED (s_is_sync = 1), sort by beneficiary_id descending
         final aBeneficiaryId = a.beneficiaryId ?? 0;
         final bBeneficiaryId = b.beneficiaryId ?? 0;
-        return bBeneficiaryId.compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
+        return bBeneficiaryId
+            .compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
       });
-      
+
       setState(() {
         _households = beneficiaries;
         _filteredHouseholds = beneficiaries;
         _isLoading = false;
         _hasLoadedOnce = true;
       });
-      
+
       // Log first few for debugging
       if (beneficiaries.isNotEmpty) {
-        for (var i = 0; i < (beneficiaries.length > 3 ? 3 : beneficiaries.length); i++) {
+        for (var i = 0;
+            i < (beneficiaries.length > 3 ? 3 : beneficiaries.length);
+            i++) {
           final b = beneficiaries[i];
           developer.log(
             'Household $i: ${b.firstName} ${b.lastName}, offline_id: ${b.offlineId}, beneficiary_id: ${b.beneficiaryId}, synced: ${b.sIsSync}',
@@ -118,6 +133,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       }
     } catch (e) {
       developer.log('Error loading households: $e', name: 'HouseholdScreen');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _hasLoadedOnce = true;
@@ -127,12 +143,15 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
 
   @override
   void dispose() {
+    _searchController.removeListener(_filterHouseholds);
+    _scrollController.removeListener(_onScroll);
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   void _filterHouseholds() {
+    if (!mounted) return;
     final query = _searchController.text.toLowerCase();
     setState(() {
       if (query.isEmpty) {
@@ -150,6 +169,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   }
 
   void _onScroll() {
+    if (!mounted || !_scrollController.hasClients) return;
+
     if (_scrollController.offset > 200 && !_showScrollToTop) {
       setState(() => _showScrollToTop = true);
     } else if (_scrollController.offset <= 200 && _showScrollToTop) {
@@ -172,7 +193,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Internet is off. Please connect to the internet to sync.'),
+            content: Text(
+                'Internet is off. Please connect to the internet to sync.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -180,12 +202,12 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       }
       return;
     }
-    
+
     // CRITICAL: Check if ALL training sites are synced before allowing household sync
     try {
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
-      
+
       if (!allSynced) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -201,7 +223,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         return;
       }
     } catch (e) {
-      developer.log('Error checking training sites sync status: $e', name: 'HouseholdScreen');
+      developer.log('Error checking training sites sync status: $e',
+          name: 'HouseholdScreen');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -213,26 +236,26 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       }
       return;
     }
-    
+
     // Additional check: Verify the specific training site for this household is synced
-    if (household.trainingSite != null && household.trainingSite!.isNotEmpty) {
+    if (household.trainingSite != null) {
       try {
         final trainingSiteRepo = TrainingSiteRepository();
-        final allTrainingSites = await trainingSiteRepo.getAll();
-        
-        // Find the training site by name
-        final trainingSite = allTrainingSites.firstWhere(
-          (site) => site.trainingSite == household.trainingSite,
-          orElse: () => throw Exception('Training site not found'),
-        );
-        
+        final trainingSite =
+            await trainingSiteRepo.getById(household.trainingSite!);
+        if (trainingSite == null) {
+          throw Exception('Training site not found');
+        }
+        final trainingSiteLabel =
+            trainingSite.trainingSite ?? 'ID ${household.trainingSite}';
+
         // Double-check if this specific training site is synced
         if (trainingSite.sIsSync == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Cannot sync household. The training site "${household.trainingSite}" is not synced yet.',
+                  'Cannot sync household. The training site "$trainingSiteLabel" is not synced yet.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 5),
@@ -242,11 +265,13 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           return;
         }
       } catch (e) {
-        developer.log('Error checking specific training site sync status: $e', name: 'HouseholdScreen');
+        developer.log('Error checking specific training site sync status: $e',
+            name: 'HouseholdScreen');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Training site "${household.trainingSite}" not found.'),
+              content: Text(
+                  'Error: Training site ID ${household.trainingSite} not found.'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -255,10 +280,12 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
         return;
       }
     }
-    
+
     try {
-      developer.log('Syncing household: ${household.firstName} ${household.lastName}', name: 'HouseholdScreen');
-      
+      developer.log(
+          'Syncing household: ${household.firstName} ${household.lastName}',
+          name: 'HouseholdScreen');
+
       // Show loading dialog
       if (mounted) {
         showDialog(
@@ -271,95 +298,122 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
           ),
         );
       }
-      
+
       // Reload complete beneficiary data from database
       // CRITICAL: Use specific lookup methods to avoid ID collision
       // If household has beneficiary_id, use getByBeneficiaryId
       // If household only has offline_id, use getByOfflineId
       Beneficiary? reloadedBeneficiary;
-      
+
       if (household.beneficiaryId != null) {
-        developer.log('Reloading beneficiary for sync using beneficiary_id: ${household.beneficiaryId}', name: 'HouseholdScreen');
-        reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(household.beneficiaryId!);
+        developer.log(
+            'Reloading beneficiary for sync using beneficiary_id: ${household.beneficiaryId}',
+            name: 'HouseholdScreen');
+        reloadedBeneficiary =
+            await _beneficiaryRepo.getByBeneficiaryId(household.beneficiaryId!);
       } else if (household.offlineId != null) {
-        developer.log('Reloading beneficiary for sync using offline_id: ${household.offlineId}', name: 'HouseholdScreen');
-        reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(household.offlineId!);
+        developer.log(
+            'Reloading beneficiary for sync using offline_id: ${household.offlineId}',
+            name: 'HouseholdScreen');
+        reloadedBeneficiary =
+            await _beneficiaryRepo.getByOfflineId(household.offlineId!);
       } else {
         throw Exception('Beneficiary has no beneficiary_id or offline_id');
       }
-      
+
       if (reloadedBeneficiary == null) {
         throw Exception('Failed to reload beneficiary data');
       }
-      
-      developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'HouseholdScreen');
-      
+
+      developer.log(
+          'Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}',
+          name: 'HouseholdScreen');
+
       // Convert beneficiary to JSON for sync (send complete data from local DB)
       final beneficiaryJson = reloadedBeneficiary.toJsonForSync();
-      
-      developer.log('Beneficiary sync payload (complete data from local DB): $beneficiaryJson', name: 'HouseholdScreen');
-      
+
+      developer.log(
+          'Beneficiary sync payload (complete data from local DB): $beneficiaryJson',
+          name: 'HouseholdScreen');
+
       // Sync to server using beneficiaryBeneSync
       final response = await _dataService.beneficiaryBeneSync(
         beneficiaries: [beneficiaryJson],
       );
-      
+
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
-      
+
       if (response.success) {
-        developer.log('========================================', name: 'HouseholdScreen');
+        developer.log('========================================',
+            name: 'HouseholdScreen');
         developer.log('Household synced successfully', name: 'HouseholdScreen');
-        developer.log('Response data: ${response.data}', name: 'HouseholdScreen');
-        developer.log('Current household - beneficiary_id: ${household.beneficiaryId}, offline_id: ${household.offlineId}, s_is_sync: ${household.sIsSync}', name: 'HouseholdScreen');
-        
+        developer.log('Response data: ${response.data}',
+            name: 'HouseholdScreen');
+        developer.log(
+            'Current household - beneficiary_id: ${household.beneficiaryId}, offline_id: ${household.offlineId}, s_is_sync: ${household.sIsSync}',
+            name: 'HouseholdScreen');
+
         // Try to extract beneficiary_id from response
         int? beneficiaryId;
-        
+
         if (response.data != null) {
           // Response format: {success: true, action: updated, beneficiary_id: 94, message: ...}
           if (response.data!['beneficiary_id'] != null) {
             beneficiaryId = response.data!['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in response: $beneficiaryId', name: 'HouseholdScreen');
+            developer.log('Found beneficiary_id in response: $beneficiaryId',
+                name: 'HouseholdScreen');
           } else if (response.data!['data'] is Map) {
             // Alternative format: {success: true, data: {beneficiary_id: 94}}
             final dataMap = response.data!['data'] as Map;
             beneficiaryId = dataMap['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in data map: $beneficiaryId', name: 'HouseholdScreen');
+            developer.log('Found beneficiary_id in data map: $beneficiaryId',
+                name: 'HouseholdScreen');
           } else if (response.data!['data'] is List) {
             // Alternative format: {success: true, data: [{beneficiary_id: 94}]}
             final mappings = response.data!['data'] as List;
             if (mappings.isNotEmpty) {
               final mapping = mappings.first;
               beneficiaryId = mapping['beneficiary_id'] as int?;
-              developer.log('Found beneficiary_id in data list: $beneficiaryId', name: 'HouseholdScreen');
+              developer.log('Found beneficiary_id in data list: $beneficiaryId',
+                  name: 'HouseholdScreen');
             }
           }
         }
-        
+
         // Always mark as synced after successful sync
-        developer.log('Marking household as synced...', name: 'HouseholdScreen');
-        
-        if (household.offlineId != null && beneficiaryId != null && household.beneficiaryId == null) {
+        developer.log('Marking household as synced...',
+            name: 'HouseholdScreen');
+
+        if (household.offlineId != null &&
+            beneficiaryId != null &&
+            household.beneficiaryId == null) {
           // Has offline_id, got beneficiary_id from server, and doesn't already have beneficiary_id - update with server ID
-          developer.log('Updating offline_id ${household.offlineId} with server beneficiary_id: $beneficiaryId', name: 'HouseholdScreen');
-          await _beneficiaryRepo.updateWithServerId(household.offlineId!, beneficiaryId);
+          developer.log(
+              'Updating offline_id ${household.offlineId} with server beneficiary_id: $beneficiaryId',
+              name: 'HouseholdScreen');
+          await _beneficiaryRepo.updateWithServerId(
+              household.offlineId!, beneficiaryId);
         } else {
           // Already has beneficiary_id or no beneficiary_id in response - just mark as synced
-          developer.log('Marking as synced (beneficiary_id: ${household.beneficiaryId ?? beneficiaryId})', name: 'HouseholdScreen');
+          developer.log(
+              'Marking as synced (beneficiary_id: ${household.beneficiaryId ?? beneficiaryId})',
+              name: 'HouseholdScreen');
           final updatedHousehold = household.copyWith(
             sIsSync: 1,
             beneficiaryId: beneficiaryId ?? household.beneficiaryId,
           );
           await _beneficiaryRepo.update(updatedHousehold);
         }
-        
-        developer.log('Update complete, reloading households...', name: 'HouseholdScreen');
-        developer.log('========================================', name: 'HouseholdScreen');
-        
+
+        developer.log('Update complete, reloading households...',
+            name: 'HouseholdScreen');
+        developer.log('========================================',
+            name: 'HouseholdScreen');
+
         // Reload households
         await _loadHouseholds();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -371,10 +425,11 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       } else {
         // Extract user-friendly error message from response
         String errorMessage = response.message ?? 'Sync failed';
-        
+
         // Log the full error for debugging
-        developer.log('Sync failed with message: $errorMessage', name: 'HouseholdScreen');
-        
+        developer.log('Sync failed with message: $errorMessage',
+            name: 'HouseholdScreen');
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -387,15 +442,15 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       }
     } catch (e) {
       developer.log('Error syncing household: $e', name: 'HouseholdScreen');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       // Extract user-friendly error message
       String errorMessage = 'Error syncing household';
-      
+
       // Try to extract message from error string if it contains JSON-like structure
       final errorStr = e.toString();
       if (errorStr.contains('message')) {
@@ -404,7 +459,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       } else {
         errorMessage = 'Error syncing: $errorStr';
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -444,12 +499,14 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
               children: [
                 // Top Bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
                       GestureDetector(
                         onTap: () => context.pop(),
-                        child: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+                        child: const Icon(Icons.arrow_back_ios,
+                            color: Colors.black87, size: 20),
                       ),
                       const Expanded(
                         child: Text(
@@ -471,7 +528,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                             color: Colors.black87,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.sync, color: Colors.white, size: 12),
+                          child: const Icon(Icons.sync,
+                              color: Colors.white, size: 12),
                         ),
                       ),
                     ],
@@ -504,9 +562,11 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                           color: Colors.grey.shade400,
                           fontSize: 14,
                         ),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 22),
+                        prefixIcon: Icon(Icons.search,
+                            color: Colors.grey.shade400, size: 22),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
@@ -516,7 +576,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
 
                 // Records Count Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(20),
@@ -604,7 +665,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                   child: _isLoading
                       ? const Center(
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF4CAF50)),
                           ),
                         )
                       : _filteredHouseholds.isEmpty
@@ -612,7 +674,8 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
+                                  Icon(Icons.search_off,
+                                      size: 64, color: Colors.grey.shade300),
                                   const SizedBox(height: 16),
                                   Text(
                                     'No households found',
@@ -626,14 +689,18 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                             )
                           : ListView.builder(
                               controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: _filteredHouseholds.length,
                               itemBuilder: (context, index) {
                                 final household = _filteredHouseholds[index];
-                                final name = '${household.firstName ?? ''} ${household.lastName ?? ''}'.trim();
-                                final nationalId = household.nationalId ?? 'N/A';
+                                final name =
+                                    '${household.firstName ?? ''} ${household.lastName ?? ''}'
+                                        .trim();
+                                final nationalId =
+                                    household.nationalId ?? 'N/A';
                                 final isSynced = household.sIsSync == 1;
-                                
+
                                 // CRITICAL FIX: Use prefixed IDs to prevent collision between beneficiary_id and offline_id
                                 // Format: "b_123" for beneficiary_id, "o_456" for offline_id
                                 final String householdId;
@@ -644,7 +711,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                                 } else {
                                   householdId = nationalId; // Fallback
                                 }
-                                
+
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: _HouseholdTile(
@@ -653,9 +720,12 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                                     isSynced: isSynced,
                                     household: household,
                                     onTap: () async {
-                                      await context.push('${AppRoutes.editHousehold}?householdId=$householdId');
+                                      await context.push(
+                                          '${AppRoutes.editHousehold}?householdId=$householdId');
                                       // Reload households after returning from edit screen
-                                      developer.log('Returned from EditHouseholdScreen, reloading households...', name: 'HouseholdScreen');
+                                      developer.log(
+                                          'Returned from EditHouseholdScreen, reloading households...',
+                                          name: 'HouseholdScreen');
                                       await _loadHouseholds();
                                     },
                                     onSync: () => _syncHousehold(household),
@@ -724,10 +794,13 @@ class _HouseholdTile extends StatelessWidget {
   Widget build(BuildContext context) {
     // Check for missing household data - only fields from EditHouseholdScreen
     final List<String> missing = [];
-    if (household.latitude == null || household.longitude == null) missing.add('GPS Location');
-    if (household.housePic == null || household.housePic!.isEmpty) missing.add('House Image');
-    if (household.cookstovePic == null || household.cookstovePic!.isEmpty) missing.add('Cookstove Image');
-    
+    if (household.latitude == null || household.longitude == null)
+      missing.add('GPS Location');
+    if (household.housePic == null || household.housePic!.isEmpty)
+      missing.add('House Image');
+    if (household.cookstovePic == null || household.cookstovePic!.isEmpty)
+      missing.add('Cookstove Image');
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -757,16 +830,15 @@ class _HouseholdTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: isSynced 
-                      ? const Color(0xFFE8F5E9) 
+                  color: isSynced
+                      ? const Color(0xFFE8F5E9)
                       : const Color(0xFFFFF3E0),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  isSynced 
-                      ? Icons.cloud : Icons.cloud_off,
-                  color: isSynced 
-                      ? const Color(0xFF4CAF50) 
+                  isSynced ? Icons.cloud : Icons.cloud_off,
+                  color: isSynced
+                      ? const Color(0xFF4CAF50)
                       : const Color(0xFFFF9800),
                   size: 24,
                 ),
@@ -804,10 +876,11 @@ class _HouseholdTile extends StatelessWidget {
                   GestureDetector(
                     onTap: isSynced ? null : onSync,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSynced 
-                            ? const Color(0xFFE8F5E9) 
+                        color: isSynced
+                            ? const Color(0xFFE8F5E9)
                             : const Color(0xFFFFF3E0),
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -817,8 +890,8 @@ class _HouseholdTile extends StatelessWidget {
                           Icon(
                             isSynced ? Icons.cloud_done : Icons.sync,
                             size: 14,
-                            color: isSynced 
-                                ? const Color(0xFF4CAF50) 
+                            color: isSynced
+                                ? const Color(0xFF4CAF50)
                                 : const Color(0xFFFF9800),
                           ),
                           const SizedBox(width: 4),
@@ -827,8 +900,8 @@ class _HouseholdTile extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: isSynced 
-                                  ? const Color(0xFF4CAF50) 
+                              color: isSynced
+                                  ? const Color(0xFF4CAF50)
                                   : const Color(0xFFFF9800),
                               letterSpacing: 0.5,
                             ),
@@ -859,7 +932,7 @@ class _HouseholdTile extends StatelessWidget {
               ),
             ],
           ),
-          
+
           // Missing tags
           if (missing.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -879,12 +952,13 @@ class _HouseholdTile extends StatelessWidget {
                 ),
                 ...missing.map(
                   (tag) => Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFCE4EC),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                      border:
+                          Border.all(color: Colors.red.withValues(alpha: 0.2)),
                     ),
                     child: Text(
                       tag,

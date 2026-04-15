@@ -9,11 +9,12 @@ import 'package:irise/data/models/training_site.dart';
 import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/view/widgets/searchable_dropdown.dart';
 import 'package:irise/route/app_routes.dart';
+import 'dart:async';
 import 'dart:developer' as developer;
 
 class TrainingPointIdentificationScreen extends StatefulWidget {
   final String? trainingPointId; // Can be training_point_id or offline_id
-  
+
   const TrainingPointIdentificationScreen({
     super.key,
     this.trainingPointId,
@@ -27,8 +28,9 @@ class TrainingPointIdentificationScreen extends StatefulWidget {
 class _TrainingPointIdentificationScreenState
     extends State<TrainingPointIdentificationScreen> {
   final DataService _dataService = DataService();
-  final TrainingSiteRepository _trainingSiteRepository = TrainingSiteRepository();
-  
+  final TrainingSiteRepository _trainingSiteRepository =
+      TrainingSiteRepository();
+
   District? _selectedDistrict;
   Authority? _selectedAuthority;
   bool _roadAccess = false;
@@ -37,8 +39,9 @@ class _TrainingPointIdentificationScreenState
   bool _hasServerData = false; // Track if server data exists
   bool _isCheckingServerData = true; // Track if we're checking for server data
   bool _isEditMode = false; // Track if we're editing an existing training site
-  TrainingSite? _existingTrainingSite; // Store the existing training site being edited
-  
+  TrainingSite?
+      _existingTrainingSite; // Store the existing training site being edited
+
   List<District> _districts = [];
   List<Authority> _authorities = [];
   bool _isLoadingDistricts = false;
@@ -60,7 +63,7 @@ class _TrainingPointIdentificationScreenState
     _checkServerDataAvailability();
     _loadDistricts();
     _loadAuthorities();
-    
+
     // Load existing training site if trainingPointId is provided
     if (widget.trainingPointId != null) {
       _loadExistingTrainingSite();
@@ -71,10 +74,10 @@ class _TrainingPointIdentificationScreenState
     try {
       final id = int.tryParse(widget.trainingPointId!);
       if (id == null) return;
-      
+
       // Try to find by training_point_id first
       TrainingSite? site = await _trainingSiteRepository.getById(id);
-      
+
       // If not found, try to find by offline_id
       if (site == null) {
         final allSites = await _trainingSiteRepository.getAll();
@@ -86,64 +89,73 @@ class _TrainingPointIdentificationScreenState
             ),
           );
         } catch (e) {
-          developer.log('Training site not found with id: $id', name: 'TrainingPointIdentification');
+          developer.log('Training site not found with id: $id',
+              name: 'TrainingPointIdentification');
           return;
         }
       }
-      
+
       // Pre-fill form fields
       setState(() {
         _isEditMode = true;
         _existingTrainingSite = site;
-        
+
         _trainingSiteNameController.text = site?.trainingSite ?? '';
         _villageHeadController.text = site?.villageHeadName ?? '';
         _groupVillageController.text = site?.gvhName ?? '';
-        _householdCountController.text = site?.houseHoldsCount?.toString() ?? '';
-        _cookstoveCountController.text = site?.cookstovesCount?.toString() ?? '';
-        _householdRadiusController.text = site?.houseHoldRadius?.toString() ?? '';
+        _householdCountController.text =
+            site?.houseHoldsCount?.toString() ?? '';
+        _cookstoveCountController.text =
+            site?.cookstovesCount?.toString() ?? '';
+        _householdRadiusController.text =
+            site?.houseHoldRadius?.toString() ?? '';
         _totalPopulationController.text = site?.totalPeople?.toString() ?? '';
         _latitudeController.text = site?.latitude?.toString() ?? '';
         _longitudeController.text = site?.longitude?.toString() ?? '';
         _roadAccess = site?.roadAccess == 'yes';
       });
-      
+
       // Set district and authority after they're loaded
       _setDistrictAndAuthority(site);
     } catch (e) {
-      developer.log('Error loading existing training site: $e', name: 'TrainingPointIdentification');
+      developer.log('Error loading existing training site: $e',
+          name: 'TrainingPointIdentification');
       _showErrorSnackBar('Failed to load training site data');
     }
   }
 
   void _setDistrictAndAuthority(TrainingSite site) {
-    // Find and set district
+    // Find and set district by ID
     if (site.district != null && _districts.isNotEmpty) {
       final district = _districts.firstWhere(
-        (d) => d.districtName == site.district,
+        (d) => (d.districtId ?? d.id) == site.district,
         orElse: () => _districts.first,
       );
       setState(() {
         _selectedDistrict = district;
       });
-      
+
       // Find and set authority (only from authorities linked to the selected district)
-      if (site.traditionalAuthority != null && _authorities.isNotEmpty && _selectedDistrict != null) {
+      if (site.traditionalAuthority != null &&
+          _authorities.isNotEmpty &&
+          _selectedDistrict != null) {
         // Filter authorities by district first
-        final filteredAuthorities = _authorities.where(
-          (a) => a.districtId == _selectedDistrict!.id
-        ).toList();
-        
-        // Then find the matching authority
+        final filteredAuthorities = _authorities
+            .where((a) => a.districtId == _selectedDistrict!.id)
+            .toList();
+
+        // Then find the matching authority by ID
         try {
           final authority = filteredAuthorities.firstWhere(
-            (a) => a.authorityName == site.traditionalAuthority,
+            (a) => (a.authorityId ?? a.id) == site.traditionalAuthority,
           );
           setState(() {
             _selectedAuthority = authority;
           });
         } catch (e) {
-          developer.log('Authority not found for district: ${site.traditionalAuthority}', name: 'TrainingPointIdentification');
+          developer.log(
+              'Authority not found for id: ${site.traditionalAuthority}',
+              name: 'TrainingPointIdentification');
         }
       }
     }
@@ -157,7 +169,8 @@ class _TrainingPointIdentificationScreenState
     try {
       final verificationResult = await _dataService.verifyDataPersistence();
       setState(() {
-        _hasServerData = verificationResult.success && verificationResult.data == true;
+        _hasServerData =
+            verificationResult.success && verificationResult.data == true;
         _isCheckingServerData = false;
       });
     } catch (e) {
@@ -180,8 +193,10 @@ class _TrainingPointIdentificationScreenState
         setState(() {
           _districts = response.data!;
         });
-        developer.log('Loaded ${_districts.length} districts from local database', name: 'TrainingPointIdentification');
-        
+        developer.log(
+            'Loaded ${_districts.length} districts from local database',
+            name: 'TrainingPointIdentification');
+
         // Set district if in edit mode
         if (_isEditMode && _existingTrainingSite != null) {
           _setDistrictAndAuthority(_existingTrainingSite!);
@@ -210,8 +225,10 @@ class _TrainingPointIdentificationScreenState
         setState(() {
           _authorities = response.data!;
         });
-        developer.log('Loaded ${_authorities.length} authorities from local database', name: 'TrainingPointIdentification');
-        
+        developer.log(
+            'Loaded ${_authorities.length} authorities from local database',
+            name: 'TrainingPointIdentification');
+
         // Set authority if in edit mode
         if (_isEditMode && _existingTrainingSite != null) {
           _setDistrictAndAuthority(_existingTrainingSite!);
@@ -273,26 +290,58 @@ class _TrainingPointIdentificationScreenState
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _showErrorSnackBar('Location permission permanently denied. Please enable in settings.');
+        _showErrorSnackBar(
+            'Location permission permanently denied. Please enable in settings.');
         return;
       }
 
       // Check if location service is enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showErrorSnackBar('Location services are disabled. Please enable location services.');
+        _showErrorSnackBar(
+            'Location services are disabled. Please enable location services.');
         return;
       }
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
+      Position? position;
+
+      try {
+        // First attempt: high accuracy with a timeout for responsiveness.
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } on TimeoutException {
+        developer.log(
+          'High accuracy location timed out. Falling back to best effort location.',
+          name: 'TrainingPointIdentification',
+        );
+
+        // Fallback 1: lower accuracy without timeout (works better on some devices).
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+          );
+        } catch (_) {
+          // Fallback 2: use last known location if current fix cannot be obtained.
+          position = await Geolocator.getLastKnownPosition();
+        }
+      }
+
+      if (position == null) {
+        _showErrorSnackBar(
+            'Unable to get location right now. Please try again in an open area.');
+        return;
+      }
+
+      final currentPosition = position;
+
+      if (!mounted) return;
 
       setState(() {
-        _latitudeController.text = position.latitude.toStringAsFixed(8);
-        _longitudeController.text = position.longitude.toStringAsFixed(8);
+        _latitudeController.text = currentPosition.latitude.toStringAsFixed(8);
+        _longitudeController.text =
+            currentPosition.longitude.toStringAsFixed(8);
       });
 
       _showSuccessSnackBar('Location fetched successfully');
@@ -331,37 +380,37 @@ class _TrainingPointIdentificationScreenState
       return false;
     }
 
-    if (_householdCountController.text.trim().isEmpty || 
+    if (_householdCountController.text.trim().isEmpty ||
         int.tryParse(_householdCountController.text.trim()) == null) {
       _showErrorSnackBar('Valid household count is required');
       return false;
     }
 
-    if (_cookstoveCountController.text.trim().isEmpty || 
+    if (_cookstoveCountController.text.trim().isEmpty ||
         int.tryParse(_cookstoveCountController.text.trim()) == null) {
       _showErrorSnackBar('Valid cookstove count is required');
       return false;
     }
 
-    if (_householdRadiusController.text.trim().isEmpty || 
+    if (_householdRadiusController.text.trim().isEmpty ||
         int.tryParse(_householdRadiusController.text.trim()) == null) {
       _showErrorSnackBar('Valid household radius is required');
       return false;
     }
 
-    if (_totalPopulationController.text.trim().isEmpty || 
+    if (_totalPopulationController.text.trim().isEmpty ||
         int.tryParse(_totalPopulationController.text.trim()) == null) {
       _showErrorSnackBar('Valid total population is required');
       return false;
     }
 
-    if (_latitudeController.text.trim().isEmpty || 
+    if (_latitudeController.text.trim().isEmpty ||
         double.tryParse(_latitudeController.text.trim()) == null) {
       _showErrorSnackBar('Please capture GPS location');
       return false;
     }
 
-    if (_longitudeController.text.trim().isEmpty || 
+    if (_longitudeController.text.trim().isEmpty ||
         double.tryParse(_longitudeController.text.trim()) == null) {
       _showErrorSnackBar('Please capture GPS location');
       return false;
@@ -380,10 +429,10 @@ class _TrainingPointIdentificationScreenState
     try {
       // CRITICAL: Verify that data has been synced from server before allowing save
       final verificationResult = await _dataService.verifyDataPersistence();
-      
+
       if (!verificationResult.success || verificationResult.data != true) {
         if (!mounted) return;
-        
+
         // Show dialog explaining that sync is required first
         await showDialog(
           context: context,
@@ -487,23 +536,24 @@ class _TrainingPointIdentificationScreenState
             );
           },
         );
-        
+
         return;
       }
-      
+
       // Data is synced, proceed with save or update
       // Get current time in UTC
       final now = DateTime.now().toUtc().toIso8601String();
-      
+
       if (_isEditMode && _existingTrainingSite != null) {
         // UPDATE existing training site
         final existingSite = _existingTrainingSite!;
         final updatedSite = existingSite.copyWith(
           trainingSite: _trainingSiteNameController.text.trim(),
-          district: _selectedDistrict!.districtName,
+          district: _selectedDistrict!.districtId ?? _selectedDistrict!.id,
           villageHeadName: _villageHeadController.text.trim(),
           gvhName: _groupVillageController.text.trim(),
-          traditionalAuthority: _selectedAuthority!.authorityName,
+          traditionalAuthority:
+              _selectedAuthority!.authorityId ?? _selectedAuthority!.id,
           houseHoldsCount: int.parse(_householdCountController.text.trim()),
           cookstovesCount: int.parse(_cookstoveCountController.text.trim()),
           houseHoldRadius: int.parse(_householdRadiusController.text.trim()),
@@ -518,13 +568,13 @@ class _TrainingPointIdentificationScreenState
         await _trainingSiteRepository.update(updatedSite);
 
         if (!mounted) return;
-        
+
         // Show success message
         _showSuccessSnackBar('Training site updated successfully');
-        
+
         // Wait a moment for the snackbar to be visible
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         // Navigate back to conduct training screen
         if (!mounted) return;
         context.go(AppRoutes.conduct_training_list);
@@ -535,10 +585,11 @@ class _TrainingPointIdentificationScreenState
 
         final trainingSite = TrainingSite(
           trainingSite: _trainingSiteNameController.text.trim(),
-          district: _selectedDistrict!.districtName,
+          district: _selectedDistrict!.districtId ?? _selectedDistrict!.id,
           villageHeadName: _villageHeadController.text.trim(),
           gvhName: _groupVillageController.text.trim(),
-          traditionalAuthority: _selectedAuthority!.authorityName,
+          traditionalAuthority:
+              _selectedAuthority!.authorityId ?? _selectedAuthority!.id,
           houseHoldsCount: int.parse(_householdCountController.text.trim()),
           cookstovesCount: int.parse(_cookstoveCountController.text.trim()),
           houseHoldRadius: int.parse(_householdRadiusController.text.trim()),
@@ -556,13 +607,13 @@ class _TrainingPointIdentificationScreenState
         await _trainingSiteRepository.insert(trainingSite);
 
         if (!mounted) return;
-        
+
         // Show success message
         _showSuccessSnackBar('Training site saved successfully');
-        
+
         // Wait a moment for the snackbar to be visible
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         // Navigate to modules screen
         if (!mounted) return;
         context.go(AppRoutes.modules);
@@ -575,7 +626,6 @@ class _TrainingPointIdentificationScreenState
       });
     }
   }
-
 
   @override
   void dispose() {
@@ -602,7 +652,7 @@ class _TrainingPointIdentificationScreenState
             top: 0,
             right: 0,
             child: Container(
-             width: 90,
+              width: 90,
               height: 100,
               decoration: const BoxDecoration(
                 color: Color(0xFF4CAF50),
@@ -629,7 +679,9 @@ class _TrainingPointIdentificationScreenState
                       ),
                       Expanded(
                         child: Text(
-                          _isEditMode ? 'Edit Training Site' : 'Training Point Identification',
+                          _isEditMode
+                              ? 'Edit Training Site'
+                              : 'Training Point Identification',
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 16,
@@ -645,7 +697,8 @@ class _TrainingPointIdentificationScreenState
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -721,7 +774,8 @@ class _TrainingPointIdentificationScreenState
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFFF9800),
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -732,7 +786,6 @@ class _TrainingPointIdentificationScreenState
                               ],
                             ),
                           ),
-                        
                         _buildLabel('TRAINING SITE NAME'),
                         const SizedBox(height: 4),
                         _buildTextField(
@@ -746,8 +799,12 @@ class _TrainingPointIdentificationScreenState
                         const SizedBox(height: 8),
                         _buildDistrictDropdown(),
                         const SizedBox(height: 16),
-
+                        // ── TRADITIONAL AUTHORITY ──
+                        _buildLabel('TRADITIONAL AUTHORITY'),
+                        const SizedBox(height: 8),
+                        _buildAuthorityDropdown(),
                         // ── VILLAGE HEAD NAME & GROUP VILLAGE HEAD ──
+                        const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
@@ -781,12 +838,6 @@ class _TrainingPointIdentificationScreenState
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-
-                        // ── TRADITIONAL AUTHORITY ──
-                        _buildLabel('TRADITIONAL AUTHORITY'),
-                        const SizedBox(height: 8),
-                        _buildAuthorityDropdown(),
                         const SizedBox(height: 16),
 
                         // ── HOUSEHOLD COUNT & COOKSTOVE COUNT ──
@@ -957,19 +1008,23 @@ class _TrainingPointIdentificationScreenState
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton.icon(
-                            onPressed: _isGettingLocation ? null : _getCurrentLocation,
-                            icon: _isGettingLocation 
+                            onPressed:
+                                _isGettingLocation ? null : _getCurrentLocation,
+                            icon: _isGettingLocation
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
                                     ),
                                   )
                                 : const Icon(Icons.my_location, size: 18),
                             label: Text(
-                              _isGettingLocation ? 'Getting Location...' : 'Get Current Location',
+                              _isGettingLocation
+                                  ? 'Getting Location...'
+                                  : 'Get Current Location',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
@@ -1037,7 +1092,8 @@ class _TrainingPointIdentificationScreenState
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
                                     ),
                                   )
                                 : Row(
@@ -1090,7 +1146,7 @@ class _TrainingPointIdentificationScreenState
     bool numbersOnly = false,
   }) {
     List<TextInputFormatter>? formatters;
-    
+
     if (numbersOnly) {
       // Only positive numbers allowed
       formatters = [
@@ -1102,7 +1158,7 @@ class _TrainingPointIdentificationScreenState
         FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
       ];
     }
-    
+
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
@@ -1146,9 +1202,11 @@ class _TrainingPointIdentificationScreenState
   Widget _buildAuthorityDropdown() {
     // Filter authorities based on selected district
     final filteredAuthorities = _selectedDistrict != null
-        ? _authorities.where((authority) => authority.districtId == _selectedDistrict!.id).toList()
+        ? _authorities
+            .where((authority) => authority.districtId == _selectedDistrict!.id)
+            .toList()
         : _authorities;
-    
+
     return SearchableDropdown<Authority>(
       value: _selectedAuthority,
       items: filteredAuthorities,
@@ -1158,8 +1216,8 @@ class _TrainingPointIdentificationScreenState
           _selectedAuthority = authority;
         });
       },
-      hint: _isLoadingAuthorities 
-          ? 'Loading authorities...' 
+      hint: _isLoadingAuthorities
+          ? 'Loading authorities...'
           : _selectedDistrict == null
               ? 'Select District first'
               : filteredAuthorities.isEmpty

@@ -5,6 +5,7 @@ import 'package:irise/data/repositories/training_site_repository.dart';
 import 'package:irise/data/repositories/beneficiary_repository.dart';
 import 'package:irise/data/repositories/cookstove_repository.dart';
 import 'package:irise/data/models/beneficiary.dart';
+import 'package:irise/data/models/training_site.dart';
 import 'package:irise/core/storage/token_storage.dart';
 import 'package:irise/core/constants/api_constants.dart';
 import 'package:irise/view/widgets/searchable_dropdown.dart';
@@ -55,12 +56,12 @@ class _BeneficiaryRegistrationScreenState
   final _malesAbove18Controller = TextEditingController(text: '');
 
   // Dropdowns
-  String? _selectedTrainingSite;
+  TrainingSite? _selectedTrainingSite;
   String _selectedLanguage = 'English';
   String? _selectedCookingMethod;
 
   // Dropdown data from database
-  List<String> _trainingSites = [];
+  List<TrainingSite> _trainingSites = [];
   List<String> _languages = ['English'];
   List<String> _cookingMethods = []; // Will be loaded from database
 
@@ -73,7 +74,7 @@ class _BeneficiaryRegistrationScreenState
   // Images
   File? _nationalIdImage;
   File? _signatureImage;
-  
+
   // Image timestamps
   String? _nationalIdTimestamp;
   String? _signatureTimestamp;
@@ -94,6 +95,11 @@ class _BeneficiaryRegistrationScreenState
   Beneficiary? _existingBeneficiary;
   bool _isEditMode = false;
 
+  int? _siteStorageId(TrainingSite? site) {
+    if (site == null) return null;
+    return site.trainingPointId ?? site.offlineId;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -110,103 +116,109 @@ class _BeneficiaryRegistrationScreenState
 
   Future<void> _loadExistingBeneficiary() async {
     try {
-      developer.log('Loading beneficiary with ID: ${widget.beneficiaryId}', name: 'BeneficiaryRegistration');
-      
-      // Parse the beneficiaryId - it could be "b_123" (beneficiary_id) or "o_456" (offline_id)
-      // This prevents ID collision between beneficiary_id and offline_id
+      developer.log('Loading beneficiary with ID: ${widget.beneficiaryId}',
+          name: 'BeneficiaryRegistration');
+
       Beneficiary? beneficiary;
-      
+
       if (widget.beneficiaryId!.startsWith('b_')) {
-        // Server beneficiary - use beneficiary_id
         final beneficiaryId = int.tryParse(widget.beneficiaryId!.substring(2));
         if (beneficiaryId != null) {
-          beneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
-          developer.log('Loaded by beneficiary_id: $beneficiaryId', name: 'BeneficiaryRegistration');
+          beneficiary =
+              await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
+          developer.log('Loaded by beneficiary_id: $beneficiaryId',
+              name: 'BeneficiaryRegistration');
         }
       } else if (widget.beneficiaryId!.startsWith('o_')) {
-        // Local beneficiary - use offline_id
         final offlineId = int.tryParse(widget.beneficiaryId!.substring(2));
         if (offlineId != null) {
           beneficiary = await _beneficiaryRepo.getByOfflineId(offlineId);
-          developer.log('Loaded by offline_id: $offlineId', name: 'BeneficiaryRegistration');
+          developer.log('Loaded by offline_id: $offlineId',
+              name: 'BeneficiaryRegistration');
         }
       } else {
-        // Fallback: try to parse as plain number (for backward compatibility)
         final id = int.tryParse(widget.beneficiaryId!);
         if (id != null) {
-          // Try beneficiary_id first, then offline_id
           beneficiary = await _beneficiaryRepo.getByBeneficiaryId(id);
-          if (beneficiary == null) {
-            beneficiary = await _beneficiaryRepo.getByOfflineId(id);
-          }
-          developer.log('Loaded by fallback ID: $id', name: 'BeneficiaryRegistration');
+          beneficiary ??= await _beneficiaryRepo.getByOfflineId(id);
+          developer.log('Loaded by fallback ID: $id',
+              name: 'BeneficiaryRegistration');
         }
       }
-      
+
       if (beneficiary != null) {
+        final existingBeneficiary = beneficiary;
+        final selectedTrainingSite = existingBeneficiary.trainingSite == null
+            ? null
+            : _trainingSites.cast<TrainingSite?>().firstWhere(
+                  (site) =>
+                      site != null &&
+                      _siteStorageId(site) == existingBeneficiary.trainingSite,
+                  orElse: () => null,
+                );
+
         setState(() {
-          _existingBeneficiary = beneficiary;
+          _existingBeneficiary = existingBeneficiary;
           _isEditMode = true;
 
           // Populate form fields
-          _selectedTrainingSite = beneficiary!.trainingSite;
-          _firstNameController.text = beneficiary.firstName ?? '';
-          _lastNameController.text = beneficiary.lastName ?? '';
-          _mobileController.text = beneficiary.mobileNo ?? '';
-          _nationalIdController.text = beneficiary.nationalId ?? '';
+          _selectedTrainingSite = selectedTrainingSite;
+          _firstNameController.text = existingBeneficiary.firstName ?? '';
+          _lastNameController.text = existingBeneficiary.lastName ?? '';
+          _mobileController.text = existingBeneficiary.mobileNo ?? '';
+          _nationalIdController.text = existingBeneficiary.nationalId ?? '';
           _femalesBelow18Controller.text =
-              beneficiary.femalesBelow18?.toString() ?? '';
+              existingBeneficiary.femalesBelow18?.toString() ?? '';
           _femalesAbove18Controller.text =
-              beneficiary.femalesAbove18?.toString() ?? '';
+              existingBeneficiary.femalesAbove18?.toString() ?? '';
           _malesBelow18Controller.text =
-              beneficiary.malesBelow18?.toString() ?? '';
+              existingBeneficiary.malesBelow18?.toString() ?? '';
           _malesAbove18Controller.text =
-              beneficiary.malesAbove18?.toString() ?? '';
-          _selectedCookingMethod = beneficiary.cookingMethod;
-          _selectedLanguage = beneficiary.language ?? 'English';
-          _readDoc = beneficiary.readDoc?.toLowerCase() == 'yes';
-          _readToYou = beneficiary.readToYou?.toLowerCase() == 'yes';
-          _understoodDoc = beneficiary.understoodDoc?.toLowerCase() == 'yes';
-          _hasOtherCookstove = beneficiary.otherCookstove?.toLowerCase() == 'yes';
+              existingBeneficiary.malesAbove18?.toString() ?? '';
+          _selectedCookingMethod = existingBeneficiary.cookingMethod;
+          _selectedLanguage = existingBeneficiary.language ?? 'English';
+          _readDoc = existingBeneficiary.readDoc?.toLowerCase() == 'yes';
+          _readToYou = existingBeneficiary.readToYou?.toLowerCase() == 'yes';
+          _understoodDoc =
+              existingBeneficiary.understoodDoc?.toLowerCase() == 'yes';
+          _hasOtherCookstove =
+              existingBeneficiary.otherCookstove?.toLowerCase() == 'yes';
 
-          // Load images - CRITICAL: Only load if paths exist and are not empty
-          // This prevents displaying images from other beneficiaries due to ID collision
-          if (beneficiary.nationalIdAttachment != null && beneficiary.nationalIdAttachment!.isNotEmpty) {
-            // Check if it's a server path (starts with /uploads/) or local file path
-            if (beneficiary.nationalIdAttachment!.startsWith('/uploads/')) {
-              // Server path - don't load as File, will display using network image
+          if (existingBeneficiary.nationalIdAttachment != null &&
+              existingBeneficiary.nationalIdAttachment!.isNotEmpty) {
+            if (existingBeneficiary.nationalIdAttachment!
+                .startsWith('/uploads/')) {
               _nationalIdImage = null;
-            } else if (File(beneficiary.nationalIdAttachment!).existsSync()) {
-              // Local file path
-              _nationalIdImage = File(beneficiary.nationalIdAttachment!);
+            } else if (File(existingBeneficiary.nationalIdAttachment!)
+                .existsSync()) {
+              _nationalIdImage =
+                  File(existingBeneficiary.nationalIdAttachment!);
             } else {
-              // Path exists but file doesn't - clear it
               _nationalIdImage = null;
-              developer.log('National ID file not found: ${beneficiary.nationalIdAttachment}', name: 'BeneficiaryRegistration');
+              developer.log(
+                  'National ID file not found: ${existingBeneficiary.nationalIdAttachment}',
+                  name: 'BeneficiaryRegistration');
             }
-            _nationalIdTimestamp = beneficiary.nationalIdTimestamp;
+            _nationalIdTimestamp = existingBeneficiary.nationalIdTimestamp;
           } else {
-            // No image path - ensure state is clear
             _nationalIdImage = null;
             _nationalIdTimestamp = null;
           }
-          
-          if (beneficiary.signature != null && beneficiary.signature!.isNotEmpty) {
-            // Check if it's a server path (starts with /uploads/) or local file path
-            if (beneficiary.signature!.startsWith('/uploads/')) {
-              // Server path - don't load as File, will display using network image
+
+          if (existingBeneficiary.signature != null &&
+              existingBeneficiary.signature!.isNotEmpty) {
+            if (existingBeneficiary.signature!.startsWith('/uploads/')) {
               _signatureImage = null;
-            } else if (File(beneficiary.signature!).existsSync()) {
-              // Local file path
-              _signatureImage = File(beneficiary.signature!);
+            } else if (File(existingBeneficiary.signature!).existsSync()) {
+              _signatureImage = File(existingBeneficiary.signature!);
             } else {
-              // Path exists but file doesn't - clear it
               _signatureImage = null;
-              developer.log('Signature file not found: ${beneficiary.signature}', name: 'BeneficiaryRegistration');
+              developer.log(
+                  'Signature file not found: ${existingBeneficiary.signature}',
+                  name: 'BeneficiaryRegistration');
             }
-            _signatureTimestamp = beneficiary.signatureTimestamp;
+            _signatureTimestamp = existingBeneficiary.signatureTimestamp;
           } else {
-            // No image path - ensure state is clear
             _signatureImage = null;
             _signatureTimestamp = null;
           }
@@ -275,10 +287,9 @@ class _BeneficiaryRegistrationScreenState
 
         // Use training site names from ALL training_sites (both synced and unsynced)
         _trainingSites = trainingSites
-            .map((t) => t.trainingSite ?? '')
-            .where((name) => name.isNotEmpty)
+            .where((site) => (site.trainingSite ?? '').isNotEmpty)
             .toList();
-        
+
         _cookingMethods = cookstoves.map((c) => c.cookstoveName).toList();
 
         _isLoading = false;
@@ -350,8 +361,7 @@ class _BeneficiaryRegistrationScreenState
           barrierDismissible: false,
           builder: (context) => const Center(
             child: CircularProgressIndicator(
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
             ),
           ),
         );
@@ -427,8 +437,7 @@ class _BeneficiaryRegistrationScreenState
 
   Future<void> _saveSignature() async {
     try {
-      final signatureData =
-          await _signaturePadKey.currentState?.toImage();
+      final signatureData = await _signaturePadKey.currentState?.toImage();
       if (signatureData != null) {
         final byteData =
             await signatureData.toByteData(format: ui.ImageByteFormat.png);
@@ -495,51 +504,52 @@ class _BeneficiaryRegistrationScreenState
       if (_isNationalIdDuplicate) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'National ID already exists. Please use a different one.'),
+            content:
+                Text('National ID already exists. Please use a different one.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
-      
+
       // Final check: Verify National ID doesn't exist in database
       final nationalIdExists = await _beneficiaryRepo.isNationalIdExists(
         _nationalIdController.text.trim(),
         excludeBeneficiaryId: _existingBeneficiary?.beneficiaryId,
         excludeOfflineId: _existingBeneficiary?.offlineId,
       );
-      
+
       if (nationalIdExists) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'National ID already exists. Please use a different one.'),
+            content:
+                Text('National ID already exists. Please use a different one.'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
           ),
         );
         return;
       }
-      
+
       // Validate National ID attachment is captured
-      if (_nationalIdImage == null && 
-          (_existingBeneficiary?.nationalIdAttachment == null || 
-           _existingBeneficiary!.nationalIdAttachment!.isEmpty)) {
+      if (_nationalIdImage == null &&
+          (_existingBeneficiary?.nationalIdAttachment == null ||
+              _existingBeneficiary!.nationalIdAttachment!.isEmpty)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('National ID image is required. Please capture National ID image.'),
+            content: Text(
+                'National ID image is required. Please capture National ID image.'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
           ),
         );
         return;
       }
-      
+
       // Validate Signature is captured
-      if (_signatureImage == null && 
-          (_existingBeneficiary?.signature == null || 
-           _existingBeneficiary!.signature!.isEmpty)) {
+      if (_signatureImage == null &&
+          (_existingBeneficiary?.signature == null ||
+              _existingBeneficiary!.signature!.isEmpty)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Signature is required. Please capture signature.'),
@@ -566,17 +576,15 @@ class _BeneficiaryRegistrationScreenState
               name: 'BeneficiaryRegistration');
 
           beneficiary = _existingBeneficiary!.copyWith(
-            trainingSite: _selectedTrainingSite,
+            trainingSite: _siteStorageId(_selectedTrainingSite),
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
             mobileNo: _mobileController.text.trim().isEmpty
                 ? null
                 : _mobileController.text.trim(),
             nationalId: _nationalIdController.text.trim(),
-            femalesBelow18:
-                int.tryParse(_femalesBelow18Controller.text) ?? 0,
-            femalesAbove18:
-                int.tryParse(_femalesAbove18Controller.text) ?? 0,
+            femalesBelow18: int.tryParse(_femalesBelow18Controller.text) ?? 0,
+            femalesAbove18: int.tryParse(_femalesAbove18Controller.text) ?? 0,
             malesBelow18: int.tryParse(_malesBelow18Controller.text) ?? 0,
             malesAbove18: int.tryParse(_malesAbove18Controller.text) ?? 0,
             cookingMethod: _selectedCookingMethod,
@@ -587,8 +595,10 @@ class _BeneficiaryRegistrationScreenState
             understoodDoc: _understoodDoc ? 'yes' : 'no',
             nationalIdAttachment: _nationalIdImage?.path,
             signature: _signatureImage?.path,
-            nationalIdTimestamp: _nationalIdTimestamp ?? _existingBeneficiary!.nationalIdTimestamp,
-            signatureTimestamp: _signatureTimestamp ?? _existingBeneficiary!.signatureTimestamp,
+            nationalIdTimestamp: _nationalIdTimestamp ??
+                _existingBeneficiary!.nationalIdTimestamp,
+            signatureTimestamp:
+                _signatureTimestamp ?? _existingBeneficiary!.signatureTimestamp,
             modifiedDate: DateTime.now().toUtc().toIso8601String(),
             modifiedBy: userId,
             sIsSync: 0,
@@ -597,20 +607,25 @@ class _BeneficiaryRegistrationScreenState
           await _beneficiaryRepo.update(beneficiary);
           developer.log('Beneficiary updated successfully',
               name: 'BeneficiaryRegistration');
-          
+
           // Reload the complete beneficiary data from database for potential sync
           // CRITICAL: Use specific lookup methods to avoid ID collision
           Beneficiary? reloadedBeneficiary;
-          
+
           if (beneficiary.beneficiaryId != null) {
-            reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiary.beneficiaryId!);
+            reloadedBeneficiary = await _beneficiaryRepo
+                .getByBeneficiaryId(beneficiary.beneficiaryId!);
           } else if (beneficiary.offlineId != null) {
-            reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(beneficiary.offlineId!);
+            reloadedBeneficiary =
+                await _beneficiaryRepo.getByOfflineId(beneficiary.offlineId!);
           }
-          
+
           if (reloadedBeneficiary != null) {
-            developer.log('Reloaded complete beneficiary data from database', name: 'BeneficiaryRegistration');
-            developer.log('Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}', name: 'BeneficiaryRegistration');
+            developer.log('Reloaded complete beneficiary data from database',
+                name: 'BeneficiaryRegistration');
+            developer.log(
+                'Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}',
+                name: 'BeneficiaryRegistration');
           }
         } else {
           developer.log('Creating new beneficiary...',
@@ -620,17 +635,15 @@ class _BeneficiaryRegistrationScreenState
 
           beneficiary = Beneficiary(
             offlineId: offlineId,
-            trainingSite: _selectedTrainingSite,
+            trainingSite: _siteStorageId(_selectedTrainingSite),
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
             mobileNo: _mobileController.text.trim().isEmpty
                 ? null
                 : _mobileController.text.trim(),
             nationalId: _nationalIdController.text.trim(),
-            femalesBelow18:
-                int.tryParse(_femalesBelow18Controller.text) ?? 0,
-            femalesAbove18:
-                int.tryParse(_femalesAbove18Controller.text) ?? 0,
+            femalesBelow18: int.tryParse(_femalesBelow18Controller.text) ?? 0,
+            femalesAbove18: int.tryParse(_femalesAbove18Controller.text) ?? 0,
             malesBelow18: int.tryParse(_malesBelow18Controller.text) ?? 0,
             malesAbove18: int.tryParse(_malesAbove18Controller.text) ?? 0,
             cookingMethod: _selectedCookingMethod,
@@ -655,7 +668,7 @@ class _BeneficiaryRegistrationScreenState
           developer.log(
               'Beneficiary saved successfully with offline_id: $offlineId',
               name: 'BeneficiaryRegistration');
-          
+
           // Reload the complete beneficiary data from database for potential sync
           // For new records, we need to find by offline_id since we don't have the database id yet
           final allBeneficiaries = await _beneficiaryRepo.getAll();
@@ -663,8 +676,11 @@ class _BeneficiaryRegistrationScreenState
             (b) => b.offlineId == offlineId,
             orElse: () => beneficiary,
           );
-          developer.log('Reloaded complete beneficiary data from database', name: 'BeneficiaryRegistration');
-          developer.log('Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}', name: 'BeneficiaryRegistration');
+          developer.log('Reloaded complete beneficiary data from database',
+              name: 'BeneficiaryRegistration');
+          developer.log(
+              'Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}',
+              name: 'BeneficiaryRegistration');
         }
 
         setState(() => _isSaving = false);
@@ -705,8 +721,7 @@ class _BeneficiaryRegistrationScreenState
         backgroundColor: Color(0xFFEAF4EA),
         body: Center(
           child: CircularProgressIndicator(
-            valueColor:
-                AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
           ),
         ),
       );
@@ -766,7 +781,8 @@ class _BeneficiaryRegistrationScreenState
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -843,15 +859,13 @@ class _BeneficiaryRegistrationScreenState
           ),
         ),
         const SizedBox(height: 8),
-        SearchableDropdown<String>(
+        SearchableDropdown<TrainingSite>(
           value: _selectedTrainingSite,
           items: _trainingSites,
-          itemLabel: (site) => site,
-          onChanged: (value) =>
-              setState(() => _selectedTrainingSite = value),
-          hint: _isLoading
-              ? 'Loading training sites...'
-              : 'Select Site Location',
+          itemLabel: (site) => site.trainingSite ?? '',
+          onChanged: (value) => setState(() => _selectedTrainingSite = value),
+          hint:
+              _isLoading ? 'Loading training sites...' : 'Select Site Location',
           isLoading: _isLoading,
         ),
       ],
@@ -906,8 +920,8 @@ class _BeneficiaryRegistrationScreenState
                       if (filtered != value) {
                         _firstNameController.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -958,8 +972,8 @@ class _BeneficiaryRegistrationScreenState
                       if (filtered != value) {
                         _lastNameController.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -1004,13 +1018,11 @@ class _BeneficiaryRegistrationScreenState
             return null;
           },
           onChanged: (value) {
-            final filtered =
-                value.replaceAll(RegExp(r'[^\d+\-\s()]'), '');
+            final filtered = value.replaceAll(RegExp(r'[^\d+\-\s()]'), '');
             if (filtered != value) {
               _mobileController.value = TextEditingValue(
                 text: filtered,
-                selection:
-                    TextSelection.collapsed(offset: filtered.length),
+                selection: TextSelection.collapsed(offset: filtered.length),
               );
             }
           },
@@ -1046,8 +1058,7 @@ class _BeneficiaryRegistrationScreenState
               hint: 'e.g. A-000000 000',
               validator: (value) {
                 if (value?.isEmpty ?? true) return 'Required';
-                final cleanValue =
-                    value!.replaceAll(RegExp(r'[\s\-]'), '');
+                final cleanValue = value!.replaceAll(RegExp(r'[\s\-]'), '');
                 if (!RegExp(r'^[A-Z0-9]+$').hasMatch(cleanValue)) {
                   return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
                 }
@@ -1067,8 +1078,8 @@ class _BeneficiaryRegistrationScreenState
                       height: 12,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.grey.shade600),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.grey.shade600),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1089,24 +1100,17 @@ class _BeneficiaryRegistrationScreenState
                 child: Row(
                   children: [
                     Icon(
-                      _isNationalIdDuplicate
-                          ? Icons.error
-                          : Icons.check_circle,
+                      _isNationalIdDuplicate ? Icons.error : Icons.check_circle,
                       size: 14,
-                      color: _isNationalIdDuplicate
-                          ? Colors.red
-                          : Colors.green,
+                      color: _isNationalIdDuplicate ? Colors.red : Colors.green,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _isNationalIdDuplicate
-                          ? 'Already exists'
-                          : 'Available',
+                      _isNationalIdDuplicate ? 'Already exists' : 'Available',
                       style: TextStyle(
                         fontSize: 11,
-                        color: _isNationalIdDuplicate
-                            ? Colors.red
-                            : Colors.green,
+                        color:
+                            _isNationalIdDuplicate ? Colors.red : Colors.green,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1162,13 +1166,12 @@ class _BeneficiaryRegistrationScreenState
                       return null;
                     },
                     onChanged: (value) {
-                      final filtered =
-                          value.replaceAll(RegExp(r'[^\d]'), '');
+                      final filtered = value.replaceAll(RegExp(r'[^\d]'), '');
                       if (filtered != value) {
                         _femalesBelow18Controller.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -1215,13 +1218,12 @@ class _BeneficiaryRegistrationScreenState
                       return null;
                     },
                     onChanged: (value) {
-                      final filtered =
-                          value.replaceAll(RegExp(r'[^\d]'), '');
+                      final filtered = value.replaceAll(RegExp(r'[^\d]'), '');
                       if (filtered != value) {
                         _femalesAbove18Controller.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -1272,13 +1274,12 @@ class _BeneficiaryRegistrationScreenState
                       return null;
                     },
                     onChanged: (value) {
-                      final filtered =
-                          value.replaceAll(RegExp(r'[^\d]'), '');
+                      final filtered = value.replaceAll(RegExp(r'[^\d]'), '');
                       if (filtered != value) {
                         _malesBelow18Controller.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -1325,13 +1326,12 @@ class _BeneficiaryRegistrationScreenState
                       return null;
                     },
                     onChanged: (value) {
-                      final filtered =
-                          value.replaceAll(RegExp(r'[^\d]'), '');
+                      final filtered = value.replaceAll(RegExp(r'[^\d]'), '');
                       if (filtered != value) {
                         _malesAbove18Controller.value = TextEditingValue(
                           text: filtered,
-                          selection: TextSelection.collapsed(
-                              offset: filtered.length),
+                          selection:
+                              TextSelection.collapsed(offset: filtered.length),
                         );
                       }
                     },
@@ -1375,8 +1375,7 @@ class _BeneficiaryRegistrationScreenState
           value: _selectedCookingMethod,
           items: _cookingMethods,
           itemLabel: (method) => method,
-          onChanged: (value) =>
-              setState(() => _selectedCookingMethod = value),
+          onChanged: (value) => setState(() => _selectedCookingMethod = value),
           hint: 'Select Cooking Method',
         ),
       ],
@@ -1484,10 +1483,11 @@ class _BeneficiaryRegistrationScreenState
   }) {
     // Determine if we should display an image from server
     final String? imagePath = _getImagePathForTitle(title);
-    final bool hasServerImage = imagePath != null && imagePath.startsWith('/uploads/');
+    final bool hasServerImage =
+        imagePath != null && imagePath.startsWith('/uploads/');
     final bool hasLocalImage = image != null;
     final bool hasAnyImage = hasServerImage || hasLocalImage;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1514,10 +1514,13 @@ class _BeneficiaryRegistrationScreenState
           ),
         ),
         const SizedBox(height: 12),
-        
+
         // Image Preview Container with dashed border
         GestureDetector(
-          onTap: hasAnyImage ? () => _showImagePreview(context, hasLocalImage ? image : null, imagePath) : null,
+          onTap: hasAnyImage
+              ? () => _showImagePreview(
+                  context, hasLocalImage ? image : null, imagePath)
+              : null,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1553,7 +1556,8 @@ class _BeneficiaryRegistrationScreenState
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+                              Icon(Icons.image,
+                                  size: 48, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
                               Text(
                                 'No image captured',
@@ -1570,7 +1574,8 @@ class _BeneficiaryRegistrationScreenState
                 if (hasAnyImage)
                   IgnorePointer(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(8),
@@ -1589,7 +1594,7 @@ class _BeneficiaryRegistrationScreenState
             ),
           ),
         ),
-        
+
         if (timestamp != null) ...[
           const SizedBox(height: 12),
           Center(
@@ -1603,9 +1608,9 @@ class _BeneficiaryRegistrationScreenState
             ),
           ),
         ],
-        
+
         const SizedBox(height: 16),
-        
+
         // Take Photo / Retake Button (full width)
         SizedBox(
           width: double.infinity,
@@ -1617,14 +1622,15 @@ class _BeneficiaryRegistrationScreenState
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
           ),
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Remove Button (only show if image exists)
         if (hasAnyImage && onRemove != null) ...[
           SizedBox(
@@ -1637,13 +1643,14 @@ class _BeneficiaryRegistrationScreenState
                 foregroundColor: const Color(0xFF4CAF50),
                 side: const BorderSide(color: Color(0xFF4CAF50)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
           const SizedBox(height: 12),
         ],
-        
+
         // Info message
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1659,35 +1666,50 @@ class _BeneficiaryRegistrationScreenState
       ],
     );
   }
-  
+
   // Helper method to get image path based on title
   // CRITICAL: Only return image path if it actually exists and is not empty
   // This prevents displaying images from other beneficiaries due to ID collision
   String? _getImagePathForTitle(String title) {
     if (_existingBeneficiary == null) return null;
-    
+
     String? imagePath;
     if (title.contains('NATIONAL ID')) {
       imagePath = _existingBeneficiary!.nationalIdAttachment;
     } else if (title.contains('SIGNATURE')) {
       imagePath = _existingBeneficiary!.signature;
     }
-    
+
     // Only return if path exists and is not empty
     if (imagePath != null && imagePath.isNotEmpty) {
       return imagePath;
     }
     return null;
   }
-  
+
   String _formatTimestamp(String isoTimestamp) {
     try {
       final dateTime = DateTime.parse(isoTimestamp).toLocal();
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       final day = dateTime.day;
       final month = months[dateTime.month - 1];
       final year = dateTime.year;
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final hour = dateTime.hour > 12
+          ? dateTime.hour - 12
+          : (dateTime.hour == 0 ? 12 : dateTime.hour);
       final minute = dateTime.minute.toString().padLeft(2, '0');
       final period = dateTime.hour >= 12 ? 'PM' : 'AM';
       return '$day $month $year, ${hour.toString().padLeft(2, '0')}:$minute $period';
@@ -1802,7 +1824,7 @@ class _BeneficiaryRegistrationScreenState
           title: 'TERMS & CONDITION',
           isExpanded: _termsExpanded,
           onTap: () => setState(() => _termsExpanded = !_termsExpanded),
-          content:  Text(
+          content: Text(
             'Language: $_selectedLanguage\n'
             'Please get the individual to confirm he/she has clearly understood '
             'and accepted the terms of the FPIC documents by signing below.',
@@ -1814,10 +1836,10 @@ class _BeneficiaryRegistrationScreenState
           icon: Icons.gavel,
           title: 'LEGAL CONSENT DETAILS',
           isExpanded: _legalConsentExpanded,
-          onTap: () => setState(
-              () => _legalConsentExpanded = !_legalConsentExpanded),
+          onTap: () =>
+              setState(() => _legalConsentExpanded = !_legalConsentExpanded),
           // FIX 3: Replaced raw multi-line string literal with explicit \n escapes
-          content:  Text(
+          content: Text(
             'Language: $_selectedLanguage\n'
             'Waiver of Carbon Rights from Energy Efficient Cookstoves\n\n'
             'Confirmation of the Terms of this Waiver by Household Cookstove User\n\n'
@@ -1877,8 +1899,7 @@ class _BeneficiaryRegistrationScreenState
                       color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(icon,
-                        color: const Color(0xFF4CAF50), size: 20),
+                    child: Icon(icon, color: const Color(0xFF4CAF50), size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1916,10 +1937,11 @@ class _BeneficiaryRegistrationScreenState
   Widget _buildSignatureSection() {
     // Check if we have a server signature image
     final String? signaturePath = _existingBeneficiary?.signature;
-    final bool hasServerSignature = signaturePath != null && signaturePath.startsWith('/uploads/');
+    final bool hasServerSignature =
+        signaturePath != null && signaturePath.startsWith('/uploads/');
     final bool hasLocalSignature = _signatureImage != null;
     final bool hasAnySignature = hasServerSignature || hasLocalSignature;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1945,7 +1967,7 @@ class _BeneficiaryRegistrationScreenState
           ),
         ),
         const SizedBox(height: 8),
-        
+
         // Show existing signature if available
         if (hasAnySignature) ...[
           Container(
@@ -2003,8 +2025,10 @@ class _BeneficiaryRegistrationScreenState
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
@@ -2038,8 +2062,8 @@ class _BeneficiaryRegistrationScreenState
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
@@ -2051,8 +2075,8 @@ class _BeneficiaryRegistrationScreenState
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF4CAF50),
                   side: const BorderSide(color: Color(0xFF4CAF50)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
@@ -2085,14 +2109,13 @@ class _BeneficiaryRegistrationScreenState
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
             : Text(
                 _isEditMode ? 'Update Beneficiary' : 'Save Registration',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
     );
@@ -2117,8 +2140,7 @@ class _BeneficiaryRegistrationScreenState
         cursorColor: Colors.green,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle:
-              const TextStyle(color: Colors.black38, fontSize: 14),
+          hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: InputBorder.none,
@@ -2129,7 +2151,8 @@ class _BeneficiaryRegistrationScreenState
     );
   }
 
-  void _showImagePreview(BuildContext context, File? localImage, String? serverImagePath) {
+  void _showImagePreview(
+      BuildContext context, File? localImage, String? serverImagePath) {
     showDialog(
       context: context,
       builder: (context) => Dialog(

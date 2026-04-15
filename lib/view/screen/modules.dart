@@ -22,10 +22,10 @@ class ModulesScreen extends StatelessWidget {
       'title': 'House Hold Distribution',
       'icon': Icons.home_outlined,
     },
-    // {
-    //   'title': 'Monitoring',
-    //   'icon': Icons.monitor_outlined,
-    // },
+    {
+      'title': 'Monitoring',
+      'icon': Icons.monitor_outlined,
+    },
     // {
     //   'title': 'Audit Process',
     //   'icon': Icons.people_outlined,
@@ -90,7 +90,8 @@ class ModulesScreen extends StatelessWidget {
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),

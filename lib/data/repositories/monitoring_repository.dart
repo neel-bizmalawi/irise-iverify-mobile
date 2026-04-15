@@ -16,27 +16,53 @@ class MonitoringRepository {
           where: 'monitoring_id = ?',
           whereArgs: [monitoring.monitoringId],
         );
-        
+
         if (existing.isNotEmpty) {
-          developer.log('Updating existing monitoring with monitoring_id: ${monitoring.monitoringId}', name: 'MonitoringRepository');
+          developer.log(
+              'Updating existing monitoring with monitoring_id: ${monitoring.monitoringId}',
+              name: 'MonitoringRepository');
+          final updateMap = monitoring.toMap()..remove('offline_id');
           return await db.update(
             'monitoring_data',
-            monitoring.toMap(),
+            updateMap,
             where: 'monitoring_id = ?',
             whereArgs: [monitoring.monitoringId],
           );
         }
       }
-      
+
+      if (monitoring.offlineId != null) {
+        final existing = await db.query(
+          'monitoring_data',
+          where: 'offline_id = ?',
+          whereArgs: [monitoring.offlineId],
+        );
+
+        if (existing.isNotEmpty) {
+          developer.log(
+              'Updating existing monitoring with offline_id: ${monitoring.offlineId}',
+              name: 'MonitoringRepository');
+          final updateMap = monitoring.toMap()..remove('offline_id');
+          return await db.update(
+            'monitoring_data',
+            updateMap,
+            where: 'offline_id = ?',
+            whereArgs: [monitoring.offlineId],
+          );
+        }
+      }
+
       // Insert new record
-      developer.log('Inserting new monitoring record', name: 'MonitoringRepository');
+      developer.log('Inserting new monitoring record',
+          name: 'MonitoringRepository');
       return await db.insert(
         'monitoring_data',
         monitoring.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
-      developer.log('Error inserting monitoring: $e', name: 'MonitoringRepository');
+      developer.log('Error inserting monitoring: $e',
+          name: 'MonitoringRepository');
       rethrow;
     }
   }
@@ -54,7 +80,22 @@ class MonitoringRepository {
       where: 'monitoring_id = ?',
       whereArgs: [id],
     );
-    
+
+    if (maps.isNotEmpty) {
+      return Monitoring.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<Monitoring?> getByOfflineId(int offlineId) async {
+    final db = await _dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'monitoring_data',
+      where: 'offline_id = ?',
+      whereArgs: [offlineId],
+      limit: 1,
+    );
+
     if (maps.isNotEmpty) {
       return Monitoring.fromMap(maps.first);
     }
@@ -65,16 +106,27 @@ class MonitoringRepository {
     final db = await _dbHelper.database;
     try {
       if (monitoring.monitoringId != null) {
+        final updateMap = monitoring.toMap()..remove('offline_id');
         return await db.update(
           'monitoring_data',
-          monitoring.toMap(),
+          updateMap,
           where: 'monitoring_id = ?',
           whereArgs: [monitoring.monitoringId],
         );
       }
+      if (monitoring.offlineId != null) {
+        final updateMap = monitoring.toMap()..remove('offline_id');
+        return await db.update(
+          'monitoring_data',
+          updateMap,
+          where: 'offline_id = ?',
+          whereArgs: [monitoring.offlineId],
+        );
+      }
       return 0;
     } catch (e) {
-      developer.log('Error updating monitoring: $e', name: 'MonitoringRepository');
+      developer.log('Error updating monitoring: $e',
+          name: 'MonitoringRepository');
       rethrow;
     }
   }
@@ -90,7 +142,8 @@ class MonitoringRepository {
 
   Future<int> getCount() async {
     final db = await _dbHelper.database;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM monitoring_data');
+    final result =
+        await db.rawQuery('SELECT COUNT(*) as count FROM monitoring_data');
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
@@ -132,12 +185,12 @@ class MonitoringRepository {
 
   Future<void> insertBulk(List<Monitoring> monitoringRecords) async {
     final db = await _dbHelper.database;
-    
+
     try {
       int inserted = 0;
       int updated = 0;
       int failed = 0;
-      
+
       for (var monitoring in monitoringRecords) {
         try {
           if (monitoring.monitoringId != null) {
@@ -146,11 +199,12 @@ class MonitoringRepository {
               where: 'monitoring_id = ?',
               whereArgs: [monitoring.monitoringId],
             );
-            
+
             if (existing.isNotEmpty) {
+              final updateMap = monitoring.toMap()..remove('offline_id');
               await db.update(
                 'monitoring_data',
-                monitoring.toMap(),
+                updateMap,
                 where: 'monitoring_id = ?',
                 whereArgs: [monitoring.monitoringId],
                 conflictAlgorithm: ConflictAlgorithm.replace,
@@ -159,7 +213,7 @@ class MonitoringRepository {
               continue;
             }
           }
-          
+
           await db.insert(
             'monitoring_data',
             monitoring.toMap(),
@@ -167,14 +221,19 @@ class MonitoringRepository {
           );
           inserted++;
         } catch (e) {
-          developer.log('Error in bulk operation for monitoring ${monitoring.monitoringId}: $e', name: 'MonitoringRepository');
+          developer.log(
+              'Error in bulk operation for monitoring ${monitoring.monitoringId}: $e',
+              name: 'MonitoringRepository');
           failed++;
         }
       }
-      
-      developer.log('Bulk operation completed: Inserted: $inserted, Updated: $updated, Failed: $failed', name: 'MonitoringRepository');
+
+      developer.log(
+          'Bulk operation completed: Inserted: $inserted, Updated: $updated, Failed: $failed',
+          name: 'MonitoringRepository');
     } catch (e) {
-      developer.log('Critical error in bulk insert: $e', name: 'MonitoringRepository');
+      developer.log('Critical error in bulk insert: $e',
+          name: 'MonitoringRepository');
       rethrow;
     }
   }
@@ -184,18 +243,41 @@ class MonitoringRepository {
     await db.delete('monitoring_data');
   }
 
-  /// Mark monitoring record as synced
-  Future<int> markAsSynced(int monitoringId) async {
+  /// Mark monitoring record as synced using either server monitoring_id or local offline_id
+  Future<int> markAsSynced({
+    int? monitoringId,
+    int? offlineId,
+    int? serverMonitoringId,
+  }) async {
     final db = await _dbHelper.database;
     try {
-      return await db.update(
-        'monitoring_data',
-        {'s_is_sync': 1},
-        where: 'monitoring_id = ?',
-        whereArgs: [monitoringId],
-      );
+      final updateData = <String, dynamic>{'s_is_sync': 1};
+      if (serverMonitoringId != null) {
+        updateData['monitoring_id'] = serverMonitoringId;
+      }
+
+      if (monitoringId != null) {
+        return await db.update(
+          'monitoring_data',
+          updateData,
+          where: 'monitoring_id = ?',
+          whereArgs: [monitoringId],
+        );
+      }
+
+      if (offlineId != null) {
+        return await db.update(
+          'monitoring_data',
+          updateData,
+          where: 'offline_id = ?',
+          whereArgs: [offlineId],
+        );
+      }
+
+      throw Exception('No monitoring_id or offline_id provided');
     } catch (e) {
-      developer.log('Error marking monitoring as synced: $e', name: 'MonitoringRepository');
+      developer.log('Error marking monitoring as synced: $e',
+          name: 'MonitoringRepository');
       rethrow;
     }
   }

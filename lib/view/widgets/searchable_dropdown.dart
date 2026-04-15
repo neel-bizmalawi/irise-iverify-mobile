@@ -28,7 +28,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      useSafeArea: false,
+      useSafeArea: true,
       builder: (context) => _SearchableDropdownDialog<T>(
         items: widget.items,
         itemLabel: widget.itemLabel,
@@ -61,9 +61,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                     : widget.hint,
                 style: TextStyle(
                   fontSize: 14,
-                  color: widget.value != null
-                      ? Colors.black87
-                      : Colors.black38,
+                  color: widget.value != null ? Colors.black87 : Colors.black38,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -121,8 +119,8 @@ class _SearchableDropdownDialogState<T>
         _filteredItems = widget.items;
       } else {
         _filteredItems = widget.items
-            .where((item) =>
-                widget.itemLabel(item).toLowerCase().contains(query))
+            .where(
+                (item) => widget.itemLabel(item).toLowerCase().contains(query))
             .toList();
       }
     });
@@ -136,9 +134,11 @@ class _SearchableDropdownDialogState<T>
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final bottomSafeInset = mediaQuery.viewPadding.bottom;
     final bottomSheetHeight = screenHeight * 0.6;
-    
+
     return Container(
       height: bottomSheetHeight,
       decoration: const BoxDecoration(
@@ -176,7 +176,7 @@ class _SearchableDropdownDialogState<T>
             ),
           ),
           const Divider(height: 1),
-          
+
           // Search field
           Padding(
             padding: const EdgeInsets.all(16),
@@ -201,7 +201,7 @@ class _SearchableDropdownDialogState<T>
               ),
             ),
           ),
-          
+
           // Items list
           Expanded(
             child: _filteredItems.isEmpty
@@ -215,7 +215,7 @@ class _SearchableDropdownDialogState<T>
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.zero,
+                    padding: EdgeInsets.only(bottom: bottomSafeInset + 12),
                     itemCount: _filteredItems.length,
                     itemBuilder: (context, index) {
                       final item = _filteredItems[index];

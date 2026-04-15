@@ -29,7 +29,8 @@ class AuthService {
       );
 
       // Check if response is successful (200 or 201)
-      if ((response.statusCode == 200 || response.statusCode == 201) && response.data != null) {
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          response.data != null) {
         // Ensure response.data is a Map
         Map<String, dynamic> responseData;
         if (response.data is String) {
@@ -37,27 +38,32 @@ class AuthService {
         } else if (response.data is Map<String, dynamic>) {
           responseData = response.data;
         } else {
-          print('AuthService: Unexpected response data type: ${response.data.runtimeType}');
+          print(
+              'AuthService: Unexpected response data type: ${response.data.runtimeType}');
           return false;
         }
-        
+
         print('AuthService: Response data keys: ${responseData.keys.toList()}');
-        print('AuthService: AccessTokenss value: ${responseData['AccessTokenss']}');
-        
+        print(
+            'AuthService: AccessTokenss value: ${responseData['AccessTokenss']}');
+
         final authResponse = AuthResponse.fromJson(responseData);
-        
+
         print('AuthService: Parsed accessToken: ${authResponse.accessToken}');
-        print('AuthService: accessToken != null: ${authResponse.accessToken != null}');
-        print('AuthService: accessToken.isNotEmpty: ${authResponse.accessToken?.isNotEmpty}');
+        print(
+            'AuthService: accessToken != null: ${authResponse.accessToken != null}');
+        print(
+            'AuthService: accessToken.isNotEmpty: ${authResponse.accessToken?.isNotEmpty}');
 
         // Save token and user data if login successful
-        if (authResponse.accessToken != null && authResponse.accessToken!.isNotEmpty) {
+        if (authResponse.accessToken != null &&
+            authResponse.accessToken!.isNotEmpty) {
           await _tokenStorage.saveToken(authResponse.accessToken!);
-          
+
           if (authResponse.refreshToken != null) {
             await _tokenStorage.saveRefreshToken(authResponse.refreshToken!);
           }
-          
+
           if (authResponse.user != null) {
             final user = authResponse.user!;
             if (user.id != null) {
@@ -70,10 +76,10 @@ class AuthService {
               await _tokenStorage.saveUserName(user.name!);
             }
           }
-          
+
           // Sync lookup data (languages, cookstoves, training sites) after successful login
           await _syncLookupData();
-          
+
           print('AuthService: Login successful, returning true');
           return true;
         } else {
@@ -112,7 +118,7 @@ class AuthService {
     final userId = await _tokenStorage.getUserId();
     final email = await _tokenStorage.getUserEmail();
     final name = await _tokenStorage.getUserName();
-    
+
     if (userId != null) {
       return {
         'id': userId,
@@ -123,44 +129,46 @@ class AuthService {
     return null;
   }
 
-  /// Sync lookup data (languages, cookstoves, training sites) after login
+  /// Sync lookup data (languages, cookstoves) after login
   /// This ensures dropdown data is available for beneficiary registration
   Future<void> _syncLookupData() async {
     try {
-      developer.log('========================================', name: 'AuthService');
+      developer.log('========================================',
+          name: 'AuthService');
       developer.log('Syncing lookup data after login...', name: 'AuthService');
-      developer.log('========================================', name: 'AuthService');
-      
+      developer.log('========================================',
+          name: 'AuthService');
+
       // Sync all lookup data in parallel
       final results = await Future.wait([
         _dataService.syncLanguagesToLocal(),
         _dataService.syncCookstovesToLocal(),
-        _dataService.syncTrainingSiteNamesToLocal(),
+        _dataService.syncAuthoritiesToLocal(),
+        _dataService.syncDistrictsToLocal(),
       ]);
-      
+
       final languagesResult = results[0];
       final cookstovesResult = results[1];
-      final trainingSitesResult = results[2];
-      
+
       if (languagesResult.success) {
-        developer.log('✅ Synced ${languagesResult.data ?? 0} languages', name: 'AuthService');
+        developer.log('✅ Synced ${languagesResult.data ?? 0} languages',
+            name: 'AuthService');
       } else {
-        developer.log('⚠️ Failed to sync languages: ${languagesResult.message}', name: 'AuthService');
+        developer.log('⚠️ Failed to sync languages: ${languagesResult.message}',
+            name: 'AuthService');
       }
-      
+
       if (cookstovesResult.success) {
-        developer.log('✅ Synced ${cookstovesResult.data ?? 0} cookstoves', name: 'AuthService');
+        developer.log('✅ Synced ${cookstovesResult.data ?? 0} cookstoves',
+            name: 'AuthService');
       } else {
-        developer.log('⚠️ Failed to sync cookstoves: ${cookstovesResult.message}', name: 'AuthService');
+        developer.log(
+            '⚠️ Failed to sync cookstoves: ${cookstovesResult.message}',
+            name: 'AuthService');
       }
-      
-      if (trainingSitesResult.success) {
-        developer.log('✅ Synced ${trainingSitesResult.data ?? 0} training site names', name: 'AuthService');
-      } else {
-        developer.log('⚠️ Failed to sync training site names: ${trainingSitesResult.message}', name: 'AuthService');
-      }
-      
-      developer.log('========================================', name: 'AuthService');
+
+      developer.log('========================================',
+          name: 'AuthService');
     } catch (e) {
       developer.log('Error syncing lookup data: $e', name: 'AuthService');
       // Don't fail login if lookup data sync fails

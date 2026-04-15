@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   static const String _databaseName = 'irise.db';
-  static const int _databaseVersion = 16;
+  static const int _databaseVersion = 18;
 
   DatabaseHelper._internal();
 
@@ -50,8 +50,8 @@ class DatabaseHelper {
         road_access TEXT DEFAULT 'no',
         village_head_name TEXT,
         gvh_name TEXT,
-        district TEXT,
-        traditional_authority TEXT,
+        district INTEGER,
+        traditional_authority INTEGER,
         total_people INTEGER,
         house_holds_count INTEGER,
         cookstoves_count INTEGER,
@@ -76,7 +76,7 @@ class DatabaseHelper {
       CREATE TABLE beneficiaries (
         offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
         beneficiary_id INTEGER UNIQUE,
-        training_site TEXT,
+        training_site INTEGER,
         m_user_id INTEGER,
         m_site_id INTEGER,
         first_name TEXT,
@@ -164,6 +164,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE districts (
         id INTEGER PRIMARY KEY,
+        district_id INTEGER UNIQUE,
         district_name TEXT,
         slug TEXT,
         region TEXT,
@@ -175,6 +176,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE authorities (
         id INTEGER PRIMARY KEY,
+        authority_id INTEGER UNIQUE,
         authority_name TEXT,
         slug TEXT,
         district_id INTEGER,
@@ -294,7 +296,8 @@ class DatabaseHelper {
       )
     ''');
 
-    developer.log('Database tables created successfully', name: 'DatabaseHelper');
+    developer.log('Database tables created successfully',
+        name: 'DatabaseHelper');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -302,12 +305,13 @@ class DatabaseHelper {
       'Upgrading database from version $oldVersion to $newVersion',
       name: 'DatabaseHelper',
     );
-    
+
     // Handle database migrations here
     if (oldVersion < 2) {
       // Migration from version 1 to 2: Change offline_id from TEXT to INTEGER
-      developer.log('Migrating offline_id columns to INTEGER', name: 'DatabaseHelper');
-      
+      developer.log('Migrating offline_id columns to INTEGER',
+          name: 'DatabaseHelper');
+
       // For training_sites table
       await db.execute('''
         CREATE TABLE training_sites_new (
@@ -337,7 +341,7 @@ class DatabaseHelper {
           server_time TEXT
         )
       ''');
-      
+
       // Copy data, converting offline_id to INTEGER
       await db.execute('''
         INSERT INTO training_sites_new 
@@ -355,11 +359,12 @@ class DatabaseHelper {
           server_time
         FROM training_sites
       ''');
-      
+
       // Drop old table and rename new one
       await db.execute('DROP TABLE training_sites');
-      await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
-      
+      await db
+          .execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+
       // Update beneficiaries table
       await db.execute('''
         CREATE TABLE beneficiaries_new (
@@ -384,7 +389,7 @@ class DatabaseHelper {
           FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
         )
       ''');
-      
+
       await db.execute('''
         INSERT INTO beneficiaries_new 
         SELECT 
@@ -399,10 +404,10 @@ class DatabaseHelper {
           server_time
         FROM beneficiaries
       ''');
-      
+
       await db.execute('DROP TABLE beneficiaries');
       await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
-      
+
       // Update trainings table
       await db.execute('''
         CREATE TABLE trainings_new (
@@ -426,7 +431,7 @@ class DatabaseHelper {
           FOREIGN KEY (training_point_id) REFERENCES training_sites (training_point_id)
         )
       ''');
-      
+
       await db.execute('''
         INSERT INTO trainings_new 
         SELECT 
@@ -441,44 +446,54 @@ class DatabaseHelper {
           server_time
         FROM trainings
       ''');
-      
+
       await db.execute('DROP TABLE trainings');
       await db.execute('ALTER TABLE trainings_new RENAME TO trainings');
-      
-      developer.log('Database migration to version 2 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 2 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 3) {
       // Migration from version 2 to 3: Fix any remaining schema issues
-      developer.log('Applying version 3 migration fixes', name: 'DatabaseHelper');
-      
+      developer.log('Applying version 3 migration fixes',
+          name: 'DatabaseHelper');
+
       // This migration will recreate tables with correct schema if needed
       // The database will be recreated cleanly
-      developer.log('Database migration to version 3 completed', name: 'DatabaseHelper');
+      developer.log('Database migration to version 3 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 4) {
       // Migration from version 3 to 4: Add created_by_name and modified_by_name columns
-      developer.log('Adding created_by_name and modified_by_name columns', name: 'DatabaseHelper');
-      
+      developer.log('Adding created_by_name and modified_by_name columns',
+          name: 'DatabaseHelper');
+
       try {
         // Add new columns to training_sites table
-        await db.execute('ALTER TABLE training_sites ADD COLUMN created_by_name TEXT');
-        await db.execute('ALTER TABLE training_sites ADD COLUMN modified_by_name TEXT');
-        
-        developer.log('Successfully added name columns to training_sites table', name: 'DatabaseHelper');
+        await db.execute(
+            'ALTER TABLE training_sites ADD COLUMN created_by_name TEXT');
+        await db.execute(
+            'ALTER TABLE training_sites ADD COLUMN modified_by_name TEXT');
+
+        developer.log('Successfully added name columns to training_sites table',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error adding columns (they might already exist): $e', name: 'DatabaseHelper');
+        developer.log('Error adding columns (they might already exist): $e',
+            name: 'DatabaseHelper');
         // Columns might already exist, continue
       }
-      
-      developer.log('Database migration to version 4 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 4 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 5) {
       // Migration from version 4 to 5: Add districts and authorities tables
-      developer.log('Adding districts and authorities tables', name: 'DatabaseHelper');
-      
+      developer.log('Adding districts and authorities tables',
+          name: 'DatabaseHelper');
+
       try {
         // Create districts table
         await db.execute('''
@@ -490,7 +505,7 @@ class DatabaseHelper {
             status TEXT
           )
         ''');
-        
+
         // Create authorities table
         await db.execute('''
           CREATE TABLE IF NOT EXISTS authorities (
@@ -501,19 +516,23 @@ class DatabaseHelper {
             status TEXT
           )
         ''');
-        
-        developer.log('Successfully added districts and authorities tables', name: 'DatabaseHelper');
+
+        developer.log('Successfully added districts and authorities tables',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error adding tables (they might already exist): $e', name: 'DatabaseHelper');
+        developer.log('Error adding tables (they might already exist): $e',
+            name: 'DatabaseHelper');
       }
-      
-      developer.log('Database migration to version 5 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 5 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 6) {
       // Migration from version 5 to 6: Add auto-increment id column and make training_point_id unique
-      developer.log('Migrating to version 6: Adding auto-increment id column', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 6: Adding auto-increment id column',
+          name: 'DatabaseHelper');
+
       try {
         // Create new training_sites table with proper schema
         await db.execute('''
@@ -547,7 +566,7 @@ class DatabaseHelper {
             server_time TEXT
           )
         ''');
-        
+
         // Copy data from old table to new table
         // The id column will be auto-generated
         await db.execute('''
@@ -568,24 +587,29 @@ class DatabaseHelper {
             offline_id, server_time
           FROM training_sites
         ''');
-        
+
         // Drop old table and rename new one
         await db.execute('DROP TABLE training_sites');
-        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
-        
-        developer.log('Successfully migrated training_sites table to version 6', name: 'DatabaseHelper');
+        await db
+            .execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+
+        developer.log('Successfully migrated training_sites table to version 6',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 6 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 6 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 6 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 6 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 7) {
       // Migration from version 6 to 7: Add conduct_training_date and number_of_people_present, remove created_by_name and modified_by_name
-      developer.log('Migrating to version 7: Updating training_sites schema', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 7: Updating training_sites schema',
+          name: 'DatabaseHelper');
+
       try {
         // Create new training_sites table with updated schema
         await db.execute('''
@@ -619,44 +643,50 @@ class DatabaseHelper {
             server_time TEXT
           )
         ''');
-        
+
         // Copy data from old table to new table (excluding created_by_name and modified_by_name)
-        await db.execute('''
-          INSERT INTO training_sites_new (
-            training_point_id, is_parent, m_training_point_id, training_site,
-            road_access, village_head_name, gvh_name, district, traditional_authority,
-            total_people, house_holds_count, cookstoves_count, house_hold_radius,
-            latitude, longitude, s_is_sync, training_status,
-            created_by, modified_by, created_date, modified_date, status,
-            offline_id, server_time
-          )
-          SELECT 
-            training_point_id, is_parent, m_training_point_id, training_site,
-            road_access, village_head_name, gvh_name, district, traditional_authority,
-            total_people, house_holds_count, cookstoves_count, house_hold_radius,
-            latitude, longitude, s_is_sync, training_status,
-            created_by, modified_by, created_date, modified_date, status,
-            offline_id, server_time
-          FROM training_sites
-        ''');
-        
+        // await db.execute('''
+        //   INSERT INTO training_sites_new (
+        //     training_point_id, is_parent, m_training_point_id, training_site,
+        //     road_access, village_head_name, gvh_name, district, traditional_authority,
+        //     total_people, house_holds_count, cookstoves_count, house_hold_radius,
+        //     latitude, longitude, s_is_sync, training_status,
+        //     created_by, modified_by, created_date, modified_date, status,
+        //     offline_id, server_time
+        //   )
+        //   SELECT
+        //     training_point_id, is_parent, m_training_point_id, training_site,
+        //     road_access, village_head_name, gvh_name, district, traditional_authority,
+        //     total_people, house_holds_count, cookstoves_count, house_hold_radius,
+        //     latitude, longitude, s_is_sync, training_status,
+        //     created_by, modified_by, created_date, modified_date, status,
+        //     offline_id, server_time
+        //   FROM training_sites
+        // ''');
+
         // Drop old table and rename new one
         await db.execute('DROP TABLE training_sites');
-        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
-        
-        developer.log('Successfully migrated training_sites table to version 7', name: 'DatabaseHelper');
+        await db
+            .execute('ALTER TABLE training_sites_new RENAME TO training_sites');
+
+        developer.log('Successfully migrated training_sites table to version 7',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 7 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 7 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 7 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 7 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 8) {
       // Migration from version 7 to 8: Update beneficiaries table with complete schema
-      developer.log('Migrating to version 8: Updating beneficiaries table schema', name: 'DatabaseHelper');
-      
+      developer.log(
+          'Migrating to version 8: Updating beneficiaries table schema',
+          name: 'DatabaseHelper');
+
       try {
         // Create new beneficiaries table with complete schema
         await db.execute('''
@@ -708,7 +738,7 @@ class DatabaseHelper {
             server_time TEXT
           )
         ''');
-        
+
         // Try to copy existing data if the old table exists and has compatible columns
         try {
           await db.execute('''
@@ -723,28 +753,36 @@ class DatabaseHelper {
               status, s_is_sync, offline_id, server_time
             FROM beneficiaries
           ''');
-          developer.log('Copied existing beneficiary data', name: 'DatabaseHelper');
+          developer.log('Copied existing beneficiary data',
+              name: 'DatabaseHelper');
         } catch (e) {
-          developer.log('No existing beneficiary data to copy or incompatible schema: $e', name: 'DatabaseHelper');
+          developer.log(
+              'No existing beneficiary data to copy or incompatible schema: $e',
+              name: 'DatabaseHelper');
         }
-        
+
         // Drop old table and rename new one
         await db.execute('DROP TABLE IF EXISTS beneficiaries');
-        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
-        
-        developer.log('Successfully migrated beneficiaries table to version 8', name: 'DatabaseHelper');
+        await db
+            .execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+
+        developer.log('Successfully migrated beneficiaries table to version 8',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 8 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 8 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 8 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 8 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 9) {
       // Migration from version 8 to 9: Add languages, cookstoves, and training_sites_list tables
-      developer.log('Migrating to version 9: Adding lookup tables', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 9: Adding lookup tables',
+          name: 'DatabaseHelper');
+
       try {
         // Create languages table
         await db.execute('''
@@ -753,7 +791,7 @@ class DatabaseHelper {
             lang_name TEXT UNIQUE NOT NULL
           )
         ''');
-        
+
         // Create cookstoves table
         await db.execute('''
           CREATE TABLE IF NOT EXISTS cookstoves (
@@ -761,7 +799,7 @@ class DatabaseHelper {
             cookstove_name TEXT UNIQUE NOT NULL
           )
         ''');
-        
+
         // Create training_sites_list table
         await db.execute('''
           CREATE TABLE IF NOT EXISTS training_sites_list (
@@ -769,20 +807,25 @@ class DatabaseHelper {
             training_site TEXT UNIQUE NOT NULL
           )
         ''');
-        
-        developer.log('Successfully added lookup tables for version 9', name: 'DatabaseHelper');
+
+        developer.log('Successfully added lookup tables for version 9',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 9 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 9 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 9 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 9 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 10) {
       // Migration from version 9 to 10: Add UNIQUE constraint to national_id
-      developer.log('Migrating to version 10: Adding UNIQUE constraint to national_id', name: 'DatabaseHelper');
-      
+      developer.log(
+          'Migrating to version 10: Adding UNIQUE constraint to national_id',
+          name: 'DatabaseHelper');
+
       try {
         // Check for duplicate national_ids before migration
         final duplicates = await db.rawQuery('''
@@ -792,17 +835,21 @@ class DatabaseHelper {
           GROUP BY national_id 
           HAVING COUNT(*) > 1
         ''');
-        
+
         if (duplicates.isNotEmpty) {
-          developer.log('⚠️ WARNING: Found ${duplicates.length} duplicate national_id values!', name: 'DatabaseHelper');
+          developer.log(
+              '⚠️ WARNING: Found ${duplicates.length} duplicate national_id values!',
+              name: 'DatabaseHelper');
           for (var dup in duplicates) {
-            developer.log('  - National ID: ${dup['national_id']} appears ${dup['count']} times', name: 'DatabaseHelper');
+            developer.log(
+                '  - National ID: ${dup['national_id']} appears ${dup['count']} times',
+                name: 'DatabaseHelper');
           }
-          
+
           // Keep only the first occurrence of each duplicate, delete the rest
           for (var dup in duplicates) {
             final nationalId = dup['national_id'] as String;
-            
+
             // Get all records with this national_id
             final records = await db.query(
               'beneficiaries',
@@ -810,7 +857,7 @@ class DatabaseHelper {
               whereArgs: [nationalId],
               orderBy: 'id ASC',
             );
-            
+
             if (records.length > 1) {
               // Keep the first record, delete the rest
               for (int i = 1; i < records.length; i++) {
@@ -820,14 +867,16 @@ class DatabaseHelper {
                   where: 'id = ?',
                   whereArgs: [recordId],
                 );
-                developer.log('  - Deleted duplicate record with id: $recordId', name: 'DatabaseHelper');
+                developer.log('  - Deleted duplicate record with id: $recordId',
+                    name: 'DatabaseHelper');
               }
             }
           }
-          
-          developer.log('Cleaned up duplicate national_id records', name: 'DatabaseHelper');
+
+          developer.log('Cleaned up duplicate national_id records',
+              name: 'DatabaseHelper');
         }
-        
+
         // Create new beneficiaries table with UNIQUE constraint on national_id
         await db.execute('''
           CREATE TABLE beneficiaries_new (
@@ -878,47 +927,58 @@ class DatabaseHelper {
             server_time TEXT
           )
         ''');
-        
+
         // Copy all data from old table to new table
         await db.execute('''
           INSERT INTO beneficiaries_new 
           SELECT * FROM beneficiaries
         ''');
-        
+
         // Drop old table and rename new one
         await db.execute('DROP TABLE beneficiaries');
-        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
-        
-        developer.log('Successfully added UNIQUE constraint to national_id', name: 'DatabaseHelper');
+        await db
+            .execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+
+        developer.log('Successfully added UNIQUE constraint to national_id',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 10 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 10 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 10 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 10 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 11) {
       // Migration from version 10 to 11: Add distribution_date column
-      developer.log('Migrating to version 11: Adding distribution_date column', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 11: Adding distribution_date column',
+          name: 'DatabaseHelper');
+
       try {
         // Add distribution_date column to beneficiaries table
-        await db.execute('ALTER TABLE beneficiaries ADD COLUMN distribution_date TEXT');
-        
-        developer.log('Successfully added distribution_date column to beneficiaries table', name: 'DatabaseHelper');
+        await db.execute(
+            'ALTER TABLE beneficiaries ADD COLUMN distribution_date TEXT');
+
+        developer.log(
+            'Successfully added distribution_date column to beneficiaries table',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 11 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 11 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 11 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 11 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 12) {
       // Migration from version 11 to 12: Add monitoring_data table
-      developer.log('Migrating to version 12: Adding monitoring_data table', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 12: Adding monitoring_data table',
+          name: 'DatabaseHelper');
+
       try {
         // Create monitoring_data table
         await db.execute('''
@@ -963,20 +1023,24 @@ class DatabaseHelper {
             status TEXT DEFAULT 'active'
           )
         ''');
-        
-        developer.log('Successfully added monitoring_data table', name: 'DatabaseHelper');
+
+        developer.log('Successfully added monitoring_data table',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 12 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 12 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 12 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 12 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 13) {
       // Migration from version 12 to 13: Add audit table
-      developer.log('Migrating to version 13: Adding audit table', name: 'DatabaseHelper');
-      
+      developer.log('Migrating to version 13: Adding audit table',
+          name: 'DatabaseHelper');
+
       try {
         // Create audit table
         await db.execute('''
@@ -1017,61 +1081,82 @@ class DatabaseHelper {
             status TEXT DEFAULT 'active'
           )
         ''');
-        
+
         developer.log('Successfully added audit table', name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 13 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 13 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 13 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 13 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 14) {
       // Migration from version 13 to 14: Add s_is_sync column to monitoring_data table
-      developer.log('Migrating to version 14: Adding s_is_sync to monitoring_data', name: 'DatabaseHelper');
-      
+      developer.log(
+          'Migrating to version 14: Adding s_is_sync to monitoring_data',
+          name: 'DatabaseHelper');
+
       try {
         // Add s_is_sync column to monitoring_data table
-        await db.execute('ALTER TABLE monitoring_data ADD COLUMN s_is_sync INTEGER DEFAULT 0');
-        
-        developer.log('Successfully added s_is_sync column to monitoring_data table', name: 'DatabaseHelper');
+        await db.execute(
+            'ALTER TABLE monitoring_data ADD COLUMN s_is_sync INTEGER DEFAULT 0');
+
+        developer.log(
+            'Successfully added s_is_sync column to monitoring_data table',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 14 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 14 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 14 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 14 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 15) {
       // Migration from version 14 to 15: Add beneficiary_id column to monitoring_data table
-      developer.log('Migrating to version 15: Adding beneficiary_id to monitoring_data', name: 'DatabaseHelper');
-      
+      developer.log(
+          'Migrating to version 15: Adding beneficiary_id to monitoring_data',
+          name: 'DatabaseHelper');
+
       try {
         // Add beneficiary_id column to monitoring_data table
-        await db.execute('ALTER TABLE monitoring_data ADD COLUMN beneficiary_id INTEGER');
-        
-        developer.log('Successfully added beneficiary_id column to monitoring_data table', name: 'DatabaseHelper');
+        await db.execute(
+            'ALTER TABLE monitoring_data ADD COLUMN beneficiary_id INTEGER');
+
+        developer.log(
+            'Successfully added beneficiary_id column to monitoring_data table',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 15 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 15 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 15 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 15 completed',
+          name: 'DatabaseHelper');
     }
-    
+
     if (oldVersion < 16) {
       // Migration from version 15 to 16: Make offline_id the primary key for all tables
-      developer.log('Migrating to version 16: Making offline_id the primary key', name: 'DatabaseHelper');
-      
+      developer.log(
+          'Migrating to version 16: Making offline_id the primary key',
+          name: 'DatabaseHelper');
+
       try {
         // ========== TRAINING_SITES TABLE ==========
-        developer.log('Migrating training_sites table...', name: 'DatabaseHelper');
-        
-        // Create new training_sites table with offline_id as primary key
+        developer.log('Migrating training_sites table...',
+            name: 'DatabaseHelper');
+
+        await db.execute('DROP TABLE IF EXISTS training_sites');
+
+        // Recreate training_sites table using the original table name
         await db.execute('''
-          CREATE TABLE training_sites_new (
+          CREATE TABLE training_sites (
             offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
             training_point_id INTEGER UNIQUE,
             is_parent TEXT DEFAULT 'no',
@@ -1080,8 +1165,8 @@ class DatabaseHelper {
             road_access TEXT DEFAULT 'no',
             village_head_name TEXT,
             gvh_name TEXT,
-            district TEXT,
-            traditional_authority TEXT,
+            district INTEGER,
+            traditional_authority INTEGER,
             total_people INTEGER,
             house_holds_count INTEGER,
             cookstoves_count INTEGER,
@@ -1100,41 +1185,22 @@ class DatabaseHelper {
             server_time TEXT
           )
         ''');
-        
-        // Copy data from old table (offline_id will auto-increment if null)
-        await db.execute('''
-          INSERT INTO training_sites_new (
-            offline_id, training_point_id, is_parent, m_training_point_id, training_site,
-            road_access, village_head_name, gvh_name, district, traditional_authority,
-            total_people, house_holds_count, cookstoves_count, house_hold_radius,
-            latitude, longitude, s_is_sync, training_status, conduct_training_date,
-            number_of_people_present, created_by, modified_by, created_date, modified_date,
-            status, server_time
-          )
-          SELECT 
-            offline_id, training_point_id, is_parent, m_training_point_id, training_site,
-            road_access, village_head_name, gvh_name, district, traditional_authority,
-            total_people, house_holds_count, cookstoves_count, house_hold_radius,
-            latitude, longitude, s_is_sync, training_status, conduct_training_date,
-            number_of_people_present, created_by, modified_by, created_date, modified_date,
-            status, server_time
-          FROM training_sites
-        ''');
-        
-        await db.execute('DROP TABLE training_sites');
-        await db.execute('ALTER TABLE training_sites_new RENAME TO training_sites');
-        
-        developer.log('training_sites table migrated successfully', name: 'DatabaseHelper');
-        
+
+        developer.log('training_sites table migrated successfully',
+            name: 'DatabaseHelper');
+
         // ========== BENEFICIARIES TABLE ==========
-        developer.log('Migrating beneficiaries table...', name: 'DatabaseHelper');
-        
-        // Create new beneficiaries table with offline_id as primary key
+        developer.log('Migrating beneficiaries table...',
+            name: 'DatabaseHelper');
+
+        await db.execute('DROP TABLE IF EXISTS beneficiaries');
+
+        // Recreate beneficiaries table using the original table name
         await db.execute('''
-          CREATE TABLE beneficiaries_new (
+          CREATE TABLE beneficiaries (
             offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
             beneficiary_id INTEGER UNIQUE,
-            training_site TEXT,
+            training_site INTEGER,
             m_user_id INTEGER,
             m_site_id INTEGER,
             first_name TEXT,
@@ -1179,48 +1245,19 @@ class DatabaseHelper {
             distribution_date TEXT
           )
         ''');
-        
-        // Copy data from old table
-        await db.execute('''
-          INSERT INTO beneficiaries_new (
-            offline_id, beneficiary_id, training_site, m_user_id, m_site_id,
-            first_name, last_name, mobile_no, other_cookstove,
-            females_below_18, females_above_18, males_below_18, males_above_18,
-            cooking_method, district_name, national_id, national_id_attachment,
-            house_pic, cookstove_pic, signature, emp_id, language,
-            read_doc, understood_doc, emp_sign, read_to_you,
-            stove_status_delivery, no_other_cook_stove_present, primary_residence_confirmation,
-            cookstove_pic_timestamp, house_pic_timestamp, national_id_timestamp, signature_timestamp,
-            device_serial_no, latitude, longitude, geo_address,
-            created_date, created_by, modified_date, modified_by,
-            status, s_is_sync, server_time, distribution_date
-          )
-          SELECT 
-            offline_id, beneficiary_id, training_site, m_user_id, m_site_id,
-            first_name, last_name, mobile_no, other_cookstove,
-            females_below_18, females_above_18, males_below_18, males_above_18,
-            cooking_method, district_name, national_id, national_id_attachment,
-            house_pic, cookstove_pic, signature, emp_id, language,
-            read_doc, understood_doc, emp_sign, read_to_you,
-            stove_status_delivery, no_other_cook_stove_present, primary_residence_confirmation,
-            cookstove_pic_timestamp, house_pic_timestamp, national_id_timestamp, signature_timestamp,
-            device_serial_no, latitude, longitude, geo_address,
-            created_date, created_by, modified_date, modified_by,
-            status, s_is_sync, server_time, distribution_date
-          FROM beneficiaries
-        ''');
-        
-        await db.execute('DROP TABLE beneficiaries');
-        await db.execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
-        
-        developer.log('beneficiaries table migrated successfully', name: 'DatabaseHelper');
-        
+
+        developer.log('beneficiaries table migrated successfully',
+            name: 'DatabaseHelper');
+
         // ========== MONITORING_DATA TABLE ==========
-        developer.log('Migrating monitoring_data table...', name: 'DatabaseHelper');
-        
-        // Create new monitoring_data table with offline_id as primary key
+        developer.log('Migrating monitoring_data table...',
+            name: 'DatabaseHelper');
+
+        await db.execute('DROP TABLE IF EXISTS monitoring_data');
+
+        // Recreate monitoring_data table using the original table name
         await db.execute('''
-          CREATE TABLE monitoring_data_new (
+          CREATE TABLE monitoring_data (
             offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
             monitoring_id INTEGER UNIQUE,
             user_id INTEGER,
@@ -1264,46 +1301,18 @@ class DatabaseHelper {
             status TEXT DEFAULT 'active'
           )
         ''');
-        
-        // Copy data from old table (monitoring_id becomes offline_id)
-        await db.execute('''
-          INSERT INTO monitoring_data_new (
-            monitoring_id, user_id, beneficiary_id, national_id, agent_name, visit_at,
-            old_gps_lat, old_gps_lng, new_gps_lat, new_gps_lng,
-            device_serial_no, new_device_serial_no, hh_name_same, stoves_present,
-            stove_being_used, times_used_today, stove_condition, photo_url,
-            nfc_tag_status, user_satisfaction, fuel_type, daily_fuel_cost,
-            savings_3_months, est_fuel_last3meals_kg, needs_training, training_type,
-            training_performed, training_not_done_reason, needs_more_visits,
-            more_visits_reason, health_hospital_less, health_better_air, photo_path,
-            s_is_sync, created_date, created_by, modified_date, modified_by,
-            server_time, status
-          )
-          SELECT 
-            monitoring_id, user_id, beneficiary_id, national_id, agent_name, visit_at,
-            old_gps_lat, old_gps_lng, new_gps_lat, new_gps_lng,
-            device_serial_no, new_device_serial_no, hh_name_same, stoves_present,
-            stove_being_used, times_used_today, stove_condition, photo_url,
-            nfc_tag_status, user_satisfaction, fuel_type, daily_fuel_cost,
-            savings_3_months, est_fuel_last3meals_kg, needs_training, training_type,
-            training_performed, training_not_done_reason, needs_more_visits,
-            more_visits_reason, health_hospital_less, health_better_air, photo_path,
-            s_is_sync, created_date, created_by, modified_date, modified_by,
-            server_time, status
-          FROM monitoring_data
-        ''');
-        
-        await db.execute('DROP TABLE monitoring_data');
-        await db.execute('ALTER TABLE monitoring_data_new RENAME TO monitoring_data');
-        
-        developer.log('monitoring_data table migrated successfully', name: 'DatabaseHelper');
-        
+
+        developer.log('monitoring_data table migrated successfully',
+            name: 'DatabaseHelper');
+
         // ========== AUDIT TABLE ==========
         developer.log('Migrating audit table...', name: 'DatabaseHelper');
-        
-        // Create new audit table with offline_id as primary key
+
+        await db.execute('DROP TABLE IF EXISTS audit');
+
+        // Recreate audit table using the original table name
         await db.execute('''
-          CREATE TABLE audit_new (
+          CREATE TABLE audit (
             offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
             audit_id INTEGER UNIQUE,
             household_name TEXT,
@@ -1341,45 +1350,193 @@ class DatabaseHelper {
             status TEXT DEFAULT 'active'
           )
         ''');
-        
-        // Copy data from old table (audit_id becomes offline_id)
-        await db.execute('''
-          INSERT INTO audit_new (
-            audit_id, household_name, national_id, phone_number, visit_date,
-            females_below_18, females_above_18, males_below_18, males_above_18,
-            has_cookstove_observe, cooking_method_before, fuel_used_before,
-            other_cooking_device_before, payment_requested, payment_requested_by,
-            training_before_receiving, read_conset, sign_consent, delivered_condition,
-            date_of_cookstove_recieved, where_received, where_trained,
-            latitude, longitude, photo_path_cook_stove, photo_path_cook_stove_area,
-            remarks, s_is_sync, created_date, created_by, modified_date, modified_by,
-            server_time, status
-          )
-          SELECT 
-            audit_id, household_name, national_id, phone_number, visit_date,
-            females_below_18, females_above_18, males_below_18, males_above_18,
-            has_cookstove_observe, cooking_method_before, fuel_used_before,
-            other_cooking_device_before, payment_requested, payment_requested_by,
-            training_before_receiving, read_conset, sign_consent, delivered_condition,
-            date_of_cookstove_recieved, where_received, where_trained,
-            latitude, longitude, photo_path_cook_stove, photo_path_cook_stove_area,
-            remarks, s_is_sync, created_date, created_by, modified_date, modified_by,
-            server_time, status
-          FROM audit
-        ''');
-        
-        await db.execute('DROP TABLE audit');
-        await db.execute('ALTER TABLE audit_new RENAME TO audit');
-        
-        developer.log('audit table migrated successfully', name: 'DatabaseHelper');
-        
-        developer.log('Successfully migrated all tables to use offline_id as primary key', name: 'DatabaseHelper');
+
+        developer.log('audit table migrated successfully',
+            name: 'DatabaseHelper');
+
+        developer.log(
+            'Successfully migrated all tables to use offline_id as primary key',
+            name: 'DatabaseHelper');
       } catch (e) {
-        developer.log('Error during version 16 migration: $e', name: 'DatabaseHelper');
+        developer.log('Error during version 16 migration: $e',
+            name: 'DatabaseHelper');
         rethrow;
       }
-      
-      developer.log('Database migration to version 16 completed', name: 'DatabaseHelper');
+
+      developer.log('Database migration to version 16 completed',
+          name: 'DatabaseHelper');
+    }
+
+    if (oldVersion < 17) {
+      // Migration from version 16 to 17: Add district_id to districts and authority_id to authorities
+      developer.log(
+          'Migrating to version 17: Adding district_id and authority_id columns',
+          name: 'DatabaseHelper');
+
+      try {
+        await db.execute(
+            'ALTER TABLE districts ADD COLUMN district_id INTEGER UNIQUE');
+        developer.log('Added district_id column to districts table',
+            name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('district_id column may already exist in districts: $e',
+            name: 'DatabaseHelper');
+      }
+
+      try {
+        await db.execute(
+            'ALTER TABLE authorities ADD COLUMN authority_id INTEGER UNIQUE');
+        developer.log('Added authority_id column to authorities table',
+            name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log(
+            'authority_id column may already exist in authorities: $e',
+            name: 'DatabaseHelper');
+      }
+
+      developer.log('Database migration to version 17 completed',
+          name: 'DatabaseHelper');
+    }
+
+    if (oldVersion < 18) {
+      developer.log(
+          'Migrating to version 18: Converting beneficiaries.training_site to INTEGER',
+          name: 'DatabaseHelper');
+
+      try {
+        await db.execute('''
+          CREATE TABLE beneficiaries_new (
+            offline_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            beneficiary_id INTEGER UNIQUE,
+            training_site INTEGER,
+            m_user_id INTEGER,
+            m_site_id INTEGER,
+            first_name TEXT,
+            last_name TEXT,
+            mobile_no TEXT,
+            other_cookstove TEXT DEFAULT 'no',
+            females_below_18 INTEGER,
+            females_above_18 INTEGER,
+            males_below_18 INTEGER,
+            males_above_18 INTEGER,
+            cooking_method TEXT,
+            district_name TEXT,
+            national_id TEXT UNIQUE,
+            national_id_attachment TEXT,
+            house_pic TEXT,
+            cookstove_pic TEXT,
+            signature TEXT,
+            emp_id INTEGER,
+            language TEXT DEFAULT 'english',
+            read_doc TEXT DEFAULT 'no',
+            understood_doc TEXT DEFAULT 'no',
+            emp_sign TEXT,
+            read_to_you TEXT DEFAULT 'no',
+            stove_status_delivery TEXT DEFAULT 'no',
+            no_other_cook_stove_present TEXT DEFAULT 'no',
+            primary_residence_confirmation TEXT DEFAULT 'no',
+            cookstove_pic_timestamp TEXT,
+            house_pic_timestamp TEXT,
+            national_id_timestamp TEXT,
+            signature_timestamp TEXT,
+            device_serial_no TEXT,
+            latitude REAL,
+            longitude REAL,
+            geo_address TEXT,
+            created_date TEXT,
+            created_by INTEGER,
+            modified_date TEXT,
+            modified_by INTEGER,
+            status TEXT DEFAULT 'active',
+            s_is_sync INTEGER DEFAULT 0,
+            server_time TEXT,
+            distribution_date TEXT
+          )
+        ''');
+
+        await db.execute('''
+          INSERT INTO beneficiaries_new (
+            offline_id, beneficiary_id, training_site, m_user_id, m_site_id,
+            first_name, last_name, mobile_no, other_cookstove,
+            females_below_18, females_above_18, males_below_18, males_above_18,
+            cooking_method, district_name, national_id, national_id_attachment,
+            house_pic, cookstove_pic, signature, emp_id, language, read_doc,
+            understood_doc, emp_sign, read_to_you, stove_status_delivery,
+            no_other_cook_stove_present, primary_residence_confirmation,
+            cookstove_pic_timestamp, house_pic_timestamp, national_id_timestamp,
+            signature_timestamp, device_serial_no, latitude, longitude,
+            geo_address, created_date, created_by, modified_date, modified_by,
+            status, s_is_sync, server_time, distribution_date
+          )
+          SELECT
+            b.offline_id,
+            b.beneficiary_id,
+            CASE
+              WHEN b.training_site IS NULL OR b.training_site = '' THEN NULL
+              WHEN b.training_site GLOB '[0-9]*' THEN CAST(b.training_site AS INTEGER)
+              ELSE (
+                SELECT COALESCE(ts.training_point_id, ts.offline_id)
+                FROM training_sites ts
+                WHERE ts.training_site = b.training_site
+                LIMIT 1
+              )
+            END,
+            b.m_user_id,
+            b.m_site_id,
+            b.first_name,
+            b.last_name,
+            b.mobile_no,
+            b.other_cookstove,
+            b.females_below_18,
+            b.females_above_18,
+            b.males_below_18,
+            b.males_above_18,
+            b.cooking_method,
+            b.district_name,
+            b.national_id,
+            b.national_id_attachment,
+            b.house_pic,
+            b.cookstove_pic,
+            b.signature,
+            b.emp_id,
+            b.language,
+            b.read_doc,
+            b.understood_doc,
+            b.emp_sign,
+            b.read_to_you,
+            b.stove_status_delivery,
+            b.no_other_cook_stove_present,
+            b.primary_residence_confirmation,
+            b.cookstove_pic_timestamp,
+            b.house_pic_timestamp,
+            b.national_id_timestamp,
+            b.signature_timestamp,
+            b.device_serial_no,
+            b.latitude,
+            b.longitude,
+            b.geo_address,
+            b.created_date,
+            b.created_by,
+            b.modified_date,
+            b.modified_by,
+            b.status,
+            b.s_is_sync,
+            b.server_time,
+            b.distribution_date
+          FROM beneficiaries b
+        ''');
+
+        await db.execute('DROP TABLE beneficiaries');
+        await db
+            .execute('ALTER TABLE beneficiaries_new RENAME TO beneficiaries');
+
+        developer.log('Database migration to version 18 completed',
+            name: 'DatabaseHelper');
+      } catch (e) {
+        developer.log('Error during version 18 migration: $e',
+            name: 'DatabaseHelper');
+        rethrow;
+      }
     }
   }
 
@@ -1403,14 +1560,15 @@ class DatabaseHelper {
         await _database!.close();
         _database = null;
       }
-      
+
       // Delete the database file
       final databasePath = await getDatabasesPath();
       final path = join(databasePath, _databaseName);
       await deleteDatabase(path);
-      
-      developer.log('Database file deleted and will be recreated', name: 'DatabaseHelper');
-      
+
+      developer.log('Database file deleted and will be recreated',
+          name: 'DatabaseHelper');
+
       // The database will be recreated on next access
     } catch (e) {
       developer.log('Error resetting database: $e', name: 'DatabaseHelper');

@@ -29,7 +29,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _checkInitialConnectivity() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_hasShownConnectivitySnackbar) {
-        final connectivityService = Provider.of<ConnectivityService>(context, listen: false);
+        final connectivityService =
+            Provider.of<ConnectivityService>(context, listen: false);
         if (!connectivityService.isConnected) {
           _hasShownConnectivitySnackbar = true;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -63,7 +64,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _loadData() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        Provider.of<DashboardProvider>(context, listen: false).loadDashboardData();
+        Provider.of<DashboardProvider>(context, listen: false)
+            .loadDashboardData();
       }
     });
   }
@@ -139,9 +141,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       // Avatar sits over the green circle
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: GestureDetector(onTap: () => context.push(AppRoutes.settings),
+                        child: GestureDetector(
+                          onTap: () => context.push(AppRoutes.settings),
                           child: CircleAvatar(
-                            backgroundColor: Colors.white.withValues(alpha: 0.3),
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.3),
                             radius: 20,
                             child: const Icon(Icons.person,
                                 color: Colors.white, size: 24),
@@ -162,7 +166,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         },
                         child: SingleChildScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -197,13 +202,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'TRAINING DATA OVERVIEW',
                                 leftIcon: Icons.check_circle_outline,
                                 leftLabel: 'TOTAL TRAINING',
-                                leftCount: dashboardProvider.totalTrainingSites.toString(),
+                                leftCount: dashboardProvider.totalTrainingSites
+                                    .toString(),
                                 leftSub: 'TOTAL TRAINING',
                                 rightIcon: Icons.cloud_off_outlined,
                                 rightLabel: 'OFFLINE TRAINING',
-                                rightCount: dashboardProvider.unsyncedTrainingSites.toString(),
+                                rightCount: dashboardProvider
+                                    .unsyncedTrainingSites
+                                    .toString(),
                                 rightSub: 'SAVED WITHOUT SYNC',
-                                lastSyncTime: dashboardProvider.getLastSyncTimeDetailed('training'),
+                                lastSyncTime: dashboardProvider
+                                    .getLastSyncTimeDetailed('training'),
                               ),
                               const SizedBox(height: 14),
 
@@ -212,13 +221,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'BENEFICIARY DATA OVERVIEW',
                                 leftIcon: Icons.storage_rounded,
                                 leftLabel: 'LOCAL SAVED',
-                                leftCount: dashboardProvider.totalBeneficiaries.toString(),
+                                leftCount: dashboardProvider.totalBeneficiaries
+                                    .toString(),
                                 leftSub: 'TOTAL RECORDS',
                                 rightIcon: Icons.cloud_off_outlined,
                                 rightLabel: 'OFFLINE SAVED',
-                                rightCount: dashboardProvider.unsyncedBeneficiaries.toString(),
+                                rightCount: dashboardProvider
+                                    .unsyncedBeneficiaries
+                                    .toString(),
                                 rightSub: 'SAVED WITHOUT SYNC',
-                                lastSyncTime: dashboardProvider.getLastSyncTimeDetailed('beneficiary'),
+                                lastSyncTime: dashboardProvider
+                                    .getLastSyncTimeDetailed('beneficiary'),
                               ),
                               const SizedBox(height: 14),
 
@@ -227,13 +240,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'MONITORING DATA OVERVIEW',
                                 leftIcon: Icons.storage_rounded,
                                 leftLabel: 'LOCAL SAVED',
-                                leftCount: dashboardProvider.totalMonitoring.toString(),
+                                leftCount: dashboardProvider.totalMonitoring
+                                    .toString(),
                                 leftSub: 'TOTAL RECORDS',
                                 rightIcon: Icons.cloud_off_outlined,
                                 rightLabel: 'OFFLINE SAVED',
-                                rightCount: dashboardProvider.unsyncedMonitoring.toString(),
+                                rightCount: dashboardProvider.unsyncedMonitoring
+                                    .toString(),
                                 rightSub: 'SAVED WITHOUT SYNC',
-                                lastSyncTime: dashboardProvider.getLastSyncTimeDetailed('monitoring'),
+                                lastSyncTime: dashboardProvider
+                                    .getLastSyncTimeDetailed('monitoring'),
                               ),
                               const SizedBox(height: 14),
 
@@ -242,13 +258,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'AUDIT DATA OVERVIEW',
                                 leftIcon: Icons.storage_rounded,
                                 leftLabel: 'LOCAL SAVED',
-                                leftCount: dashboardProvider.totalAudit.toString(),
+                                leftCount:
+                                    dashboardProvider.totalAudit.toString(),
                                 leftSub: 'TOTAL AUDIT',
                                 rightIcon: Icons.cloud_off_outlined,
                                 rightLabel: 'OFFLINE SAVED',
-                                rightCount: dashboardProvider.unsyncedAudit.toString(),
+                                rightCount:
+                                    dashboardProvider.unsyncedAudit.toString(),
                                 rightSub: 'SAVED WITHOUT SYNC',
-                                lastSyncTime: dashboardProvider.getLastSyncTimeDetailed('audit'),
+                                lastSyncTime: dashboardProvider
+                                    .getLastSyncTimeDetailed('audit'),
                               ),
                               const SizedBox(height: 20),
                             ],
@@ -295,11 +314,12 @@ class _DataOverviewCard extends StatelessWidget {
   });
 
   void _handleSyncPressed(BuildContext context) async {
-    final dashboardProvider = Provider.of<DashboardProvider>(context, listen: false);
-    
+    final dashboardProvider =
+        Provider.of<DashboardProvider>(context, listen: false);
+
     // Determine module name
     String moduleName;
-    
+
     if (title.contains('TRAINING')) {
       moduleName = 'Training';
     } else if (title.contains('BENEFICIARY')) {
@@ -320,7 +340,8 @@ class _DataOverviewCard extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please sync Training Data first before syncing Beneficiary Data'),
+              content: Text(
+                  'Please sync Training Data first before syncing Beneficiary Data'),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 3),
             ),
@@ -339,23 +360,29 @@ class _DataOverviewCard extends StatelessWidget {
         onCheckForData: () async {
           // Get existing count from database
           final existingCount = dashboardProvider.totalTrainingSites;
-          
+          final checkpoint =
+              await dashboardProvider.getTrainingSiteSyncCheckpointInfo();
+          final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
           // Check if we have last sync date
           final hasLastSync = dashboardProvider.lastTrainingSiteSync != null;
-          
+
           if (hasLastSync) {
             // Incremental sync - check if there are actually new records
             // We need to call the API to check for updates
-            final lastSyncDate = dashboardProvider.lastTrainingSiteSync!.toUtc().toIso8601String();
-            
+            final lastSyncDate = dashboardProvider.lastTrainingSiteSync!
+                .toUtc()
+                .toIso8601String();
+
             try {
               // Create DataService instance to check for updates
               final dataService = DataService();
-              final response = await dataService.getUpdatedTrainingSites(lastSyncDate);
-              
+              final response =
+                  await dataService.getUpdatedTrainingSites(lastSyncDate);
+
               if (response.success && response.data != null) {
                 final newRecordsCount = response.data!.length;
-                
+
                 if (newRecordsCount > 0) {
                   // There are new records to download
                   return SyncCheckResult(
@@ -393,6 +420,22 @@ class _DataOverviewCard extends StatelessWidget {
             }
           } else {
             // Initial sync - need to download all data
+            if (hasCheckpoint) {
+              final nextPage = checkpoint['nextPage'] as int;
+              final totalPages = checkpoint['totalPages'] as int;
+              final processedRecords = checkpoint['processedRecords'] as int;
+              final totalRecords = checkpoint['totalRecords'] as int;
+
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount:
+                    totalRecords > 0 ? (totalRecords - processedRecords) : 0,
+                existingRecords: existingCount,
+                message:
+                    'Previous sync was interrupted at page $nextPage/$totalPages ($processedRecords/$totalRecords records). You can resume or start from the beginning.',
+              );
+            }
+
             return SyncCheckResult(
               hasNewData: true,
               newRecordsCount: 0, // Will be determined during download
@@ -405,41 +448,88 @@ class _DataOverviewCard extends StatelessWidget {
           try {
             // Get existing count before sync
             final existingCount = dashboardProvider.totalTrainingSites;
-            
+            bool restartFromFirstPage = false;
+
+            // For initial sync, if checkpoint exists, allow resume or restart.
+            if (dashboardProvider.lastTrainingSiteSync == null) {
+              final checkpoint =
+                  await dashboardProvider.getTrainingSiteSyncCheckpointInfo();
+              final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
+              if (hasCheckpoint && context.mounted) {
+                final choice = await showDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Resume Training Sync?'),
+                    content: Text(
+                      'A previous sync stopped at page ${checkpoint['nextPage']}/${checkpoint['totalPages']} after ${checkpoint['processedRecords']} records.\n\nChoose how to continue.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('cancel'),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('restart'),
+                        child: const Text('Start From Beginning'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('resume'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Resume'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (choice == 'cancel' || choice == null) {
+                  return false;
+                }
+                restartFromFirstPage = choice == 'restart';
+              }
+            }
+
             // Track total records from server
             int totalRecordsFromServer = 0;
-            
+
             // Perform sync with real-time progress updates
             final result = await dashboardProvider.syncTrainingSites(
+              restartFromFirstPage: restartFromFirstPage,
               onProgress: (status, current, total) {
                 // current = cumulative records downloaded so far
                 // total = total records available on server
-                
+
                 if (total > 0) {
                   totalRecordsFromServer = total;
                   final remaining = total - current;
-                  
+
                   // Update progress: existing, downloaded, remaining
                   onProgress(existingCount, current, remaining);
                 }
               },
             );
-            
+
             if (result.success) {
               // Save sync time
               await dashboardProvider.saveTrainingSyncTime();
-              
+
               // Refresh dashboard data to get actual counts
               await dashboardProvider.refreshData();
-              
+
               // Final progress update - all downloaded, 0 remaining
               if (totalRecordsFromServer > 0) {
                 onProgress(existingCount, totalRecordsFromServer, 0);
               }
-              
+
               return true;
             }
-            
+
             return false;
           } catch (e) {
             return false;
@@ -465,22 +555,28 @@ class _DataOverviewCard extends StatelessWidget {
         onCheckForData: () async {
           // Get existing count from database
           final existingCount = dashboardProvider.totalBeneficiaries;
-          
+          final checkpoint =
+              await dashboardProvider.getBeneficiarySyncCheckpointInfo();
+          final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
           // Check if we have last sync date
           final hasLastSync = dashboardProvider.lastBeneficiarySync != null;
-          
+
           if (hasLastSync) {
             // Incremental sync - check if there are actually new records
-            final lastSyncDate = dashboardProvider.lastBeneficiarySync!.toUtc().toIso8601String();
-            
+            final lastSyncDate = dashboardProvider.lastBeneficiarySync!
+                .toUtc()
+                .toIso8601String();
+
             try {
               // Create DataService instance to check for updates
               final dataService = DataService();
-              final response = await dataService.getUpdatedBeneficiaries(lastSyncDate);
-              
+              final response =
+                  await dataService.getUpdatedBeneficiaries(lastSyncDate);
+
               if (response.success && response.data != null) {
                 final newRecordsCount = response.data!.length;
-                
+
                 if (newRecordsCount > 0) {
                   // There are new records to download
                   return SyncCheckResult(
@@ -518,6 +614,21 @@ class _DataOverviewCard extends StatelessWidget {
             }
           } else {
             // Initial sync - need to download all data
+            if (hasCheckpoint) {
+              final nextPage = checkpoint['nextPage'] as int;
+              final totalPages = checkpoint['totalPages'] as int;
+              final processedRecords = checkpoint['processedRecords'] as int;
+              final totalRecords = checkpoint['totalRecords'] as int;
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount:
+                    totalRecords > 0 ? (totalRecords - processedRecords) : 0,
+                existingRecords: existingCount,
+                message:
+                    'Previous sync was interrupted at page $nextPage/$totalPages ($processedRecords/$totalRecords records). You can resume or start from the beginning.',
+              );
+            }
+
             return SyncCheckResult(
               hasNewData: true,
               newRecordsCount: 0, // Will be determined during download
@@ -530,35 +641,82 @@ class _DataOverviewCard extends StatelessWidget {
           try {
             // Get existing count before sync
             final existingCount = dashboardProvider.totalBeneficiaries;
-            
+            bool restartFromFirstPage = false;
+
+            // For initial sync, if checkpoint exists, allow resume or restart.
+            if (dashboardProvider.lastBeneficiarySync == null) {
+              final checkpoint =
+                  await dashboardProvider.getBeneficiarySyncCheckpointInfo();
+              final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
+              if (hasCheckpoint && context.mounted) {
+                final choice = await showDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Resume Beneficiary Sync?'),
+                    content: Text(
+                      'A previous sync stopped at page ${checkpoint['nextPage']}/${checkpoint['totalPages']} after ${checkpoint['processedRecords']} records.\n\nChoose how to continue.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('cancel'),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('restart'),
+                        child: const Text('Start From Beginning'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('resume'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Resume'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (choice == 'cancel' || choice == null) {
+                  return false;
+                }
+                restartFromFirstPage = choice == 'restart';
+              }
+            }
+
             // Track total records from server
             int totalRecordsFromServer = 0;
-            
+
             // Perform sync with real-time progress updates
             final result = await dashboardProvider.syncBeneficiaries(
+              restartFromFirstPage: restartFromFirstPage,
               onProgress: (status, current, total) {
                 if (total > 0) {
                   totalRecordsFromServer = total;
                   final remaining = total - current;
-                  
+
                   // Update progress: existing, downloaded, remaining
                   onProgress(existingCount, current, remaining);
                 }
               },
             );
-            
+
             if (result.success) {
               // Refresh dashboard data to get actual counts
               await dashboardProvider.refreshData();
-              
+
               // Final progress update - all downloaded, 0 remaining
               if (totalRecordsFromServer > 0) {
                 onProgress(existingCount, totalRecordsFromServer, 0);
               }
-              
+
               return true;
             }
-            
+
             return false;
           } catch (e) {
             return false;
@@ -584,22 +742,27 @@ class _DataOverviewCard extends StatelessWidget {
         onCheckForData: () async {
           // Get existing count from database
           final existingCount = dashboardProvider.totalMonitoring;
-          
+          final checkpoint =
+              await dashboardProvider.getMonitoringSyncCheckpointInfo();
+          final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
           // Check if we have last sync date
           final hasLastSync = dashboardProvider.lastMonitoringSync != null;
-          
+
           if (hasLastSync) {
             // Incremental sync - check if there are actually new records
-            final lastSyncDate = dashboardProvider.lastMonitoringSync!.toUtc().toIso8601String();
-            
+            final lastSyncDate =
+                dashboardProvider.lastMonitoringSync!.toUtc().toIso8601String();
+
             try {
               // Create DataService instance to check for updates
               final dataService = DataService();
-              final response = await dataService.getUpdatedMonitoring(lastSyncDate);
-              
+              final response =
+                  await dataService.getUpdatedMonitoring(lastSyncDate);
+
               if (response.success && response.data != null) {
                 final newRecordsCount = response.data!.length;
-                
+
                 if (newRecordsCount > 0) {
                   // There are new records to download
                   return SyncCheckResult(
@@ -637,6 +800,21 @@ class _DataOverviewCard extends StatelessWidget {
             }
           } else {
             // Initial sync - need to download all data
+            if (hasCheckpoint) {
+              final nextPage = checkpoint['nextPage'] as int;
+              final totalPages = checkpoint['totalPages'] as int;
+              final processedRecords = checkpoint['processedRecords'] as int;
+              final totalRecords = checkpoint['totalRecords'] as int;
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount:
+                    totalRecords > 0 ? (totalRecords - processedRecords) : 0,
+                existingRecords: existingCount,
+                message:
+                    'Previous sync was interrupted at page $nextPage/$totalPages ($processedRecords/$totalRecords records). You can resume or start from the beginning.',
+              );
+            }
+
             return SyncCheckResult(
               hasNewData: true,
               newRecordsCount: 0, // Will be determined during download
@@ -649,35 +827,82 @@ class _DataOverviewCard extends StatelessWidget {
           try {
             // Get existing count before sync
             final existingCount = dashboardProvider.totalMonitoring;
-            
+            bool restartFromFirstPage = false;
+
+            // For initial sync, if checkpoint exists, allow resume or restart.
+            if (dashboardProvider.lastMonitoringSync == null) {
+              final checkpoint =
+                  await dashboardProvider.getMonitoringSyncCheckpointInfo();
+              final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
+              if (hasCheckpoint && context.mounted) {
+                final choice = await showDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Resume Monitoring Sync?'),
+                    content: Text(
+                      'A previous sync stopped at page ${checkpoint['nextPage']}/${checkpoint['totalPages']} after ${checkpoint['processedRecords']} records.\n\nChoose how to continue.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('cancel'),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('restart'),
+                        child: const Text('Start From Beginning'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('resume'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Resume'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (choice == 'cancel' || choice == null) {
+                  return false;
+                }
+                restartFromFirstPage = choice == 'restart';
+              }
+            }
+
             // Track total records from server
             int totalRecordsFromServer = 0;
-            
+
             // Perform sync with real-time progress updates
             final result = await dashboardProvider.syncMonitoring(
+              restartFromFirstPage: restartFromFirstPage,
               onProgress: (status, current, total) {
                 if (total > 0) {
                   totalRecordsFromServer = total;
                   final remaining = total - current;
-                  
+
                   // Update progress: existing, downloaded, remaining
                   onProgress(existingCount, current, remaining);
                 }
               },
             );
-            
+
             if (result.success) {
               // Refresh dashboard data to get actual counts
               await dashboardProvider.refreshData();
-              
+
               // Final progress update - all downloaded, 0 remaining
               if (totalRecordsFromServer > 0) {
                 onProgress(existingCount, totalRecordsFromServer, 0);
               }
-              
+
               return true;
             }
-            
+
             return false;
           } catch (e) {
             return false;
@@ -703,22 +928,26 @@ class _DataOverviewCard extends StatelessWidget {
         onCheckForData: () async {
           // Get existing count from database
           final existingCount = dashboardProvider.totalAudit;
-          
+          final checkpoint =
+              await dashboardProvider.getAuditSyncCheckpointInfo();
+          final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
           // Check if we have last sync date
           final hasLastSync = dashboardProvider.lastAuditSync != null;
-          
+
           if (hasLastSync) {
             // Incremental sync - check if there are actually new records
-            final lastSyncDate = dashboardProvider.lastAuditSync!.toUtc().toIso8601String();
-            
+            final lastSyncDate =
+                dashboardProvider.lastAuditSync!.toUtc().toIso8601String();
+
             try {
               // Create DataService instance to check for updates
               final dataService = DataService();
               final response = await dataService.getUpdatedAudits(lastSyncDate);
-              
+
               if (response.success && response.data != null) {
                 final newRecordsCount = response.data!.length;
-                
+
                 if (newRecordsCount > 0) {
                   // There are new records to download
                   return SyncCheckResult(
@@ -756,6 +985,21 @@ class _DataOverviewCard extends StatelessWidget {
             }
           } else {
             // Initial sync - need to download all data
+            if (hasCheckpoint) {
+              final nextPage = checkpoint['nextPage'] as int;
+              final totalPages = checkpoint['totalPages'] as int;
+              final processedRecords = checkpoint['processedRecords'] as int;
+              final totalRecords = checkpoint['totalRecords'] as int;
+              return SyncCheckResult(
+                hasNewData: true,
+                newRecordsCount:
+                    totalRecords > 0 ? (totalRecords - processedRecords) : 0,
+                existingRecords: existingCount,
+                message:
+                    'Previous sync was interrupted at page $nextPage/$totalPages ($processedRecords/$totalRecords records). You can resume or start from the beginning.',
+              );
+            }
+
             return SyncCheckResult(
               hasNewData: true,
               newRecordsCount: 0, // Will be determined during download
@@ -768,35 +1012,82 @@ class _DataOverviewCard extends StatelessWidget {
           try {
             // Get existing count before sync
             final existingCount = dashboardProvider.totalAudit;
-            
+            bool restartFromFirstPage = false;
+
+            // For initial sync, if checkpoint exists, allow resume or restart.
+            if (dashboardProvider.lastAuditSync == null) {
+              final checkpoint =
+                  await dashboardProvider.getAuditSyncCheckpointInfo();
+              final hasCheckpoint = checkpoint['hasCheckpoint'] == true;
+
+              if (hasCheckpoint && context.mounted) {
+                final choice = await showDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Resume Audit Sync?'),
+                    content: Text(
+                      'A previous sync stopped at page ${checkpoint['nextPage']}/${checkpoint['totalPages']} after ${checkpoint['processedRecords']} records.\n\nChoose how to continue.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('cancel'),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('restart'),
+                        child: const Text('Start From Beginning'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('resume'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Resume'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (choice == 'cancel' || choice == null) {
+                  return false;
+                }
+                restartFromFirstPage = choice == 'restart';
+              }
+            }
+
             // Track total records from server
             int totalRecordsFromServer = 0;
-            
+
             // Perform sync with real-time progress updates
             final result = await dashboardProvider.syncAudit(
+              restartFromFirstPage: restartFromFirstPage,
               onProgress: (status, current, total) {
                 if (total > 0) {
                   totalRecordsFromServer = total;
                   final remaining = total - current;
-                  
+
                   // Update progress: existing, downloaded, remaining
                   onProgress(existingCount, current, remaining);
                 }
               },
             );
-            
+
             if (result.success) {
               // Refresh dashboard data to get actual counts
               await dashboardProvider.refreshData();
-              
+
               // Final progress update - all downloaded, 0 remaining
               if (totalRecordsFromServer > 0) {
                 onProgress(existingCount, totalRecordsFromServer, 0);
               }
-              
+
               return true;
             }
-            
+
             return false;
           } catch (e) {
             return false;
@@ -874,7 +1165,6 @@ class _DataOverviewCard extends StatelessWidget {
                   letterSpacing: 0.3,
                 ),
               ),
-              
             ],
           ),
           const SizedBox(height: 12),
@@ -910,7 +1200,8 @@ class _DataOverviewCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.access_time, size: 13, color: Color(0xFF4CAF50)),
+                  const Icon(Icons.access_time,
+                      size: 13, color: Color(0xFF4CAF50)),
                   const SizedBox(width: 4),
                   Text(
                     '$lastSyncTime',

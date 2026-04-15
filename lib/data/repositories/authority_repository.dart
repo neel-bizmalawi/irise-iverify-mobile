@@ -13,10 +13,12 @@ class AuthorityRepository {
     try {
       final db = await _dbHelper.database;
       final id = await db.insert(_tableName, _toMap(authority));
-      developer.log('Inserted authority: ${authority.authorityName}', name: 'AuthorityRepository');
+      developer.log('Inserted authority: ${authority.authorityName}',
+          name: 'AuthorityRepository');
       return id;
     } catch (e) {
-      developer.log('Error inserting authority: $e', name: 'AuthorityRepository');
+      developer.log('Error inserting authority: $e',
+          name: 'AuthorityRepository');
       rethrow;
     }
   }
@@ -26,7 +28,7 @@ class AuthorityRepository {
     try {
       final db = await _dbHelper.database;
       final batch = db.batch();
-      
+
       for (final authority in authorities) {
         batch.insert(
           _tableName,
@@ -34,11 +36,13 @@ class AuthorityRepository {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
-      
+
       await batch.commit(noResult: true);
-      developer.log('Bulk inserted ${authorities.length} authorities', name: 'AuthorityRepository');
+      developer.log('Bulk inserted ${authorities.length} authorities',
+          name: 'AuthorityRepository');
     } catch (e) {
-      developer.log('Error bulk inserting authorities: $e', name: 'AuthorityRepository');
+      developer.log('Error bulk inserting authorities: $e',
+          name: 'AuthorityRepository');
       rethrow;
     }
   }
@@ -51,10 +55,11 @@ class AuthorityRepository {
         _tableName,
         orderBy: 'authority_name ASC',
       );
-      
+
       return maps.map((map) => _fromMap(map)).toList();
     } catch (e) {
-      developer.log('Error getting all authorities: $e', name: 'AuthorityRepository');
+      developer.log('Error getting all authorities: $e',
+          name: 'AuthorityRepository');
       return [];
     }
   }
@@ -69,10 +74,11 @@ class AuthorityRepository {
         whereArgs: [districtId],
         orderBy: 'authority_name ASC',
       );
-      
+
       return maps.map((map) => _fromMap(map)).toList();
     } catch (e) {
-      developer.log('Error getting authorities by district: $e', name: 'AuthorityRepository');
+      developer.log('Error getting authorities by district: $e',
+          name: 'AuthorityRepository');
       return [];
     }
   }
@@ -87,13 +93,14 @@ class AuthorityRepository {
         whereArgs: [id],
         limit: 1,
       );
-      
+
       if (maps.isNotEmpty) {
         return _fromMap(maps.first);
       }
       return null;
     } catch (e) {
-      developer.log('Error getting authority by ID: $e', name: 'AuthorityRepository');
+      developer.log('Error getting authority by ID: $e',
+          name: 'AuthorityRepository');
       return null;
     }
   }
@@ -108,13 +115,14 @@ class AuthorityRepository {
         whereArgs: [name],
         limit: 1,
       );
-      
+
       if (maps.isNotEmpty) {
         return _fromMap(maps.first);
       }
       return null;
     } catch (e) {
-      developer.log('Error getting authority by name: $e', name: 'AuthorityRepository');
+      developer.log('Error getting authority by name: $e',
+          name: 'AuthorityRepository');
       return null;
     }
   }
@@ -130,7 +138,8 @@ class AuthorityRepository {
         whereArgs: [authority.id],
       );
     } catch (e) {
-      developer.log('Error updating authority: $e', name: 'AuthorityRepository');
+      developer.log('Error updating authority: $e',
+          name: 'AuthorityRepository');
       rethrow;
     }
   }
@@ -145,7 +154,8 @@ class AuthorityRepository {
         whereArgs: [id],
       );
     } catch (e) {
-      developer.log('Error deleting authority: $e', name: 'AuthorityRepository');
+      developer.log('Error deleting authority: $e',
+          name: 'AuthorityRepository');
       rethrow;
     }
   }
@@ -157,7 +167,8 @@ class AuthorityRepository {
       await db.delete(_tableName);
       developer.log('Cleared all authorities', name: 'AuthorityRepository');
     } catch (e) {
-      developer.log('Error clearing authorities: $e', name: 'AuthorityRepository');
+      developer.log('Error clearing authorities: $e',
+          name: 'AuthorityRepository');
       rethrow;
     }
   }
@@ -166,10 +177,12 @@ class AuthorityRepository {
   Future<int> getCount() async {
     try {
       final db = await _dbHelper.database;
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
+      final result =
+          await db.rawQuery('SELECT COUNT(*) as count FROM $_tableName');
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
-      developer.log('Error getting authority count: $e', name: 'AuthorityRepository');
+      developer.log('Error getting authority count: $e',
+          name: 'AuthorityRepository');
       return 0;
     }
   }
@@ -178,6 +191,7 @@ class AuthorityRepository {
   Map<String, dynamic> _toMap(Authority authority) {
     return {
       'id': authority.id,
+      'authority_id': authority.authorityId,
       'authority_name': authority.authorityName,
       'slug': authority.slug,
       'district_id': authority.districtId,
@@ -189,6 +203,7 @@ class AuthorityRepository {
   Authority _fromMap(Map<String, dynamic> map) {
     return Authority(
       id: map['id'] as int?,
+      authorityId: map['authority_id'] as int?,
       authorityName: map['authority_name'] as String?,
       slug: map['slug'] as String?,
       districtId: map['district_id'] as int?,

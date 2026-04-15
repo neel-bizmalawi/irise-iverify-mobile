@@ -16,7 +16,7 @@ import 'dart:developer' as developer;
 
 class EditHouseholdScreen extends StatefulWidget {
   final String? householdId;
-  
+
   const EditHouseholdScreen({super.key, this.householdId});
 
   @override
@@ -30,33 +30,33 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final TokenStorage _tokenStorage = TokenStorage();
   final DataService _dataService = DataService();
-  
+
   // Controllers
   final _cookStoveDetailsController = TextEditingController();
   final _deviceSerialNoController = TextEditingController();
-  
+
   // GPS coordinates
   double? _latitude;
   double? _longitude;
-  
+
   // Images
   File? _houseImage;
   String? _houseImagePath;
   String? _houseImageTimestamp;
-  
+
   File? _cookStoveImage;
   String? _cookStoveImagePath;
   String? _cookStoveImageTimestamp;
-  
+
   // Consent toggles
   bool _consent1 = false; // stove_status_delivery
   bool _consent2 = false; // no_other_cook_stove_present
   bool _consent3 = false; // primary_residence_confirmation
-  
+
   bool _isSaving = false;
   bool _isLoading = true;
   Beneficiary? _beneficiary;
-  
+
   // Validation state
   bool _isDeviceSerialNoChecking = false;
   bool _isDeviceSerialNoDuplicate = false;
@@ -67,53 +67,67 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     _loadBeneficiary();
     _setupDeviceSerialNoListener();
   }
-  
+
   void _setupDeviceSerialNoListener() {
     _deviceSerialNoController.addListener(() async {
       final text = _deviceSerialNoController.text;
 
-      developer.log('=== Device Serial No Listener Fired ===', name: 'EditHouseholdScreen');
+      developer.log('=== Device Serial No Listener Fired ===',
+          name: 'EditHouseholdScreen');
       developer.log('Text: "$text"', name: 'EditHouseholdScreen');
-      
+
       // Convert to uppercase and filter to alphanumeric only
       final filtered = text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
       if (filtered != text) {
-        developer.log('Converting "$text" to "$filtered"', name: 'EditHouseholdScreen');
+        developer.log('Converting "$text" to "$filtered"',
+            name: 'EditHouseholdScreen');
         _deviceSerialNoController.value = TextEditingValue(
           text: filtered,
           selection: TextSelection.collapsed(offset: filtered.length),
         );
         return;
       }
-      
-      developer.log('Text after filtering: "$text"', name: 'EditHouseholdScreen');
-      developer.log('Current _beneficiary: ${_beneficiary != null ? "LOADED" : "NULL"}', name: 'EditHouseholdScreen');
+
+      developer.log('Text after filtering: "$text"',
+          name: 'EditHouseholdScreen');
+      developer.log(
+          'Current _beneficiary: ${_beneficiary != null ? "LOADED" : "NULL"}',
+          name: 'EditHouseholdScreen');
       if (_beneficiary != null) {
-        developer.log('  - beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
-        developer.log('  - offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
-        developer.log('  - name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
+        developer.log('  - beneficiary_id: ${_beneficiary!.beneficiaryId}',
+            name: 'EditHouseholdScreen');
+        developer.log('  - offline_id: ${_beneficiary!.offlineId}',
+            name: 'EditHouseholdScreen');
+        developer.log(
+            '  - name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}',
+            name: 'EditHouseholdScreen');
       }
-      
+
       // Check for duplicates (exclude current beneficiary if editing)
       if (text.trim().isNotEmpty) {
         setState(() => _isDeviceSerialNoChecking = true);
-        
-        developer.log('Calling isDeviceSerialNoExists...', name: 'EditHouseholdScreen');
+
+        developer.log('Calling isDeviceSerialNoExists...',
+            name: 'EditHouseholdScreen');
         final exists = await _beneficiaryRepo.isDeviceSerialNoExists(
           text.trim(),
           excludeBeneficiaryId: _beneficiary?.beneficiaryId,
           excludeOfflineId: _beneficiary?.offlineId,
         );
-        
-        developer.log('Result: ${exists ? "EXISTS (DUPLICATE)" : "NOT EXISTS (AVAILABLE)"}', name: 'EditHouseholdScreen');
-        developer.log('=== End Device Serial No Check ===', name: 'EditHouseholdScreen');
-        
+
+        developer.log(
+            'Result: ${exists ? "EXISTS (DUPLICATE)" : "NOT EXISTS (AVAILABLE)"}',
+            name: 'EditHouseholdScreen');
+        developer.log('=== End Device Serial No Check ===',
+            name: 'EditHouseholdScreen');
+
         setState(() {
           _isDeviceSerialNoChecking = false;
           _isDeviceSerialNoDuplicate = exists;
         });
       } else {
-        developer.log('Text is empty, skipping check', name: 'EditHouseholdScreen');
+        developer.log('Text is empty, skipping check',
+            name: 'EditHouseholdScreen');
         setState(() {
           _isDeviceSerialNoChecking = false;
           _isDeviceSerialNoDuplicate = false;
@@ -129,25 +143,29 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     }
 
     setState(() => _isLoading = true);
-    
+
     try {
-      developer.log('Loading beneficiary with ID: ${widget.householdId}', name: 'EditHouseholdScreen');
-      
+      developer.log('Loading beneficiary with ID: ${widget.householdId}',
+          name: 'EditHouseholdScreen');
+
       // Parse the householdId - it could be "b_123" (beneficiary_id) or "o_456" (offline_id)
       // This prevents ID collision between beneficiary_id and offline_id
       if (widget.householdId!.startsWith('b_')) {
         // Server beneficiary - use beneficiary_id
         final beneficiaryId = int.tryParse(widget.householdId!.substring(2));
         if (beneficiaryId != null) {
-          _beneficiary = await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
-          developer.log('Loaded by beneficiary_id: $beneficiaryId', name: 'EditHouseholdScreen');
+          _beneficiary =
+              await _beneficiaryRepo.getByBeneficiaryId(beneficiaryId);
+          developer.log('Loaded by beneficiary_id: $beneficiaryId',
+              name: 'EditHouseholdScreen');
         }
       } else if (widget.householdId!.startsWith('o_')) {
         // Local beneficiary - use offline_id
         final offlineId = int.tryParse(widget.householdId!.substring(2));
         if (offlineId != null) {
           _beneficiary = await _beneficiaryRepo.getByOfflineId(offlineId);
-          developer.log('Loaded by offline_id: $offlineId', name: 'EditHouseholdScreen');
+          developer.log('Loaded by offline_id: $offlineId',
+              name: 'EditHouseholdScreen');
         }
       } else {
         // Fallback: try to parse as plain number (for backward compatibility)
@@ -158,14 +176,16 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           if (_beneficiary == null) {
             _beneficiary = await _beneficiaryRepo.getByOfflineId(id);
           }
-          developer.log('Loaded by fallback ID: $id', name: 'EditHouseholdScreen');
+          developer.log('Loaded by fallback ID: $id',
+              name: 'EditHouseholdScreen');
         }
       }
-      
+
       if (_beneficiary == null) {
-        developer.log('Beneficiary not found with ID: ${widget.householdId}', name: 'EditHouseholdScreen');
+        developer.log('Beneficiary not found with ID: ${widget.householdId}',
+            name: 'EditHouseholdScreen');
         setState(() => _isLoading = false);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -177,22 +197,30 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         }
         return;
       }
-      
+
       if (_beneficiary != null) {
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        developer.log('Beneficiary loaded successfully', name: 'EditHouseholdScreen');
-        developer.log('Name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
-        developer.log('beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
-        developer.log('offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
-        developer.log('device_serial_no: ${_beneficiary!.deviceSerialNo}', name: 'EditHouseholdScreen');
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+        developer.log('Beneficiary loaded successfully',
+            name: 'EditHouseholdScreen');
+        developer.log(
+            'Name: ${_beneficiary!.firstName} ${_beneficiary!.lastName}',
+            name: 'EditHouseholdScreen');
+        developer.log('beneficiary_id: ${_beneficiary!.beneficiaryId}',
+            name: 'EditHouseholdScreen');
+        developer.log('offline_id: ${_beneficiary!.offlineId}',
+            name: 'EditHouseholdScreen');
+        developer.log('device_serial_no: ${_beneficiary!.deviceSerialNo}',
+            name: 'EditHouseholdScreen');
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+
         // Populate form fields
         _cookStoveDetailsController.text = _beneficiary!.cookingMethod ?? '';
         _deviceSerialNoController.text = _beneficiary!.deviceSerialNo ?? '';
         _latitude = _beneficiary!.latitude;
         _longitude = _beneficiary!.longitude;
-        
+
         // Load image paths and files
         _houseImagePath = _beneficiary!.housePic;
         _houseImageTimestamp = _beneficiary!.housePicTimestamp;
@@ -206,7 +234,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
             _houseImage = File(_houseImagePath!);
           }
         }
-        
+
         _cookStoveImagePath = _beneficiary!.cookstovePic;
         _cookStoveImageTimestamp = _beneficiary!.cookstovePicTimestamp;
         if (_cookStoveImagePath != null) {
@@ -219,18 +247,21 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
             _cookStoveImage = File(_cookStoveImagePath!);
           }
         }
-        
+
         // Load consent values
         _consent1 = _beneficiary!.stoveStatusDelivery?.toLowerCase() == 'yes';
-        _consent2 = _beneficiary!.noOtherCookStovePresent?.toLowerCase() == 'yes';
-        _consent3 = _beneficiary!.primaryResidenceConfirmation?.toLowerCase() == 'yes';
+        _consent2 =
+            _beneficiary!.noOtherCookStovePresent?.toLowerCase() == 'yes';
+        _consent3 =
+            _beneficiary!.primaryResidenceConfirmation?.toLowerCase() == 'yes';
       }
-      
+
       setState(() => _isLoading = false);
     } catch (e) {
-      developer.log('Error loading beneficiary: $e', name: 'EditHouseholdScreen');
+      developer.log('Error loading beneficiary: $e',
+          name: 'EditHouseholdScreen');
       setState(() => _isLoading = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -254,23 +285,24 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     try {
       // Check location permission
       var permission = await Permission.location.status;
-      
+
       if (permission.isDenied) {
         permission = await Permission.location.request();
       }
-      
+
       if (permission.isPermanentlyDenied) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permission is permanently denied. Please enable it in settings.'),
+              content: Text(
+                  'Location permission is permanently denied. Please enable it in settings.'),
               backgroundColor: Colors.red,
             ),
           );
         }
         return;
       }
-      
+
       if (!permission.isGranted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -282,7 +314,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         }
         return;
       }
-      
+
       // Show loading dialog
       if (mounted) {
         showDialog(
@@ -295,36 +327,37 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           ),
         );
       }
-      
+
       // Get current position
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      
+
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
-      
+
       setState(() {
         _latitude = position.latitude;
         _longitude = position.longitude;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('GPS captured: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}'),
+            content: Text(
+                'GPS captured: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}'),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
       }
     } catch (e) {
       developer.log('Error capturing GPS: $e', name: 'EditHouseholdScreen');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -388,7 +421,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       if (compressedPath != null) {
         final fileSizeKB = await ImageUtils.getFileSizeKB(compressedPath);
         final timestamp = DateTime.now().toUtc().toIso8601String();
-        
+
         setState(() {
           if (type == 'house') {
             _houseImage = File(compressedPath);
@@ -404,7 +437,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$type image captured (${fileSizeKB.toStringAsFixed(1)} KB)'),
+              content: Text(
+                  '$type image captured (${fileSizeKB.toStringAsFixed(1)} KB)'),
               backgroundColor: const Color(0xFF4CAF50),
             ),
           );
@@ -421,12 +455,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
     } catch (e) {
       developer.log('Error taking photo: $e', name: 'EditHouseholdScreen');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -460,7 +494,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       setState(() {
         if (type == 'house') {
@@ -473,11 +507,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           _cookStoveImageTimestamp = null;
         }
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${type == 'house' ? 'House' : 'Cook stove'} image removed. Please capture a new image.'),
+            content: Text(
+                '${type == 'house' ? 'House' : 'Cook stove'} image removed. Please capture a new image.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -496,30 +531,33 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         );
         return;
       }
-      
+
       // Check for duplicate Device Serial Number only if it's provided
       if (_deviceSerialNoController.text.trim().isNotEmpty) {
         if (_isDeviceSerialNoDuplicate) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Device Serial No already exists. Please use a different one.'),
+              content: Text(
+                  'Device Serial No already exists. Please use a different one.'),
               backgroundColor: Colors.red,
             ),
           );
           return;
         }
-        
+
         // Final check: Verify Device Serial No doesn't exist in database
-        final deviceSerialNoExists = await _beneficiaryRepo.isDeviceSerialNoExists(
+        final deviceSerialNoExists =
+            await _beneficiaryRepo.isDeviceSerialNoExists(
           _deviceSerialNoController.text.trim(),
           excludeBeneficiaryId: _beneficiary?.beneficiaryId,
           excludeOfflineId: _beneficiary?.offlineId,
         );
-        
+
         if (deviceSerialNoExists) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Device Serial No already exists. Please use a different one.'),
+              content: Text(
+                  'Device Serial No already exists. Please use a different one.'),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 4),
             ),
@@ -527,58 +565,68 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           return;
         }
       }
-      
+
       // Validate mandatory fields (Device Serial No is now optional)
       if (_latitude == null || _longitude == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('GPS location is required. Please capture GPS coordinates.'),
+            content: Text(
+                'GPS location is required. Please capture GPS coordinates.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
-      
+
       if (_houseImagePath == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('House image is required. Please capture house image.'),
+            content:
+                Text('House image is required. Please capture house image.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
-      
+
       if (_cookStoveImagePath == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cook stove image is required. Please capture cook stove image.'),
+            content: Text(
+                'Cook stove image is required. Please capture cook stove image.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
-      
+
       setState(() => _isSaving = true);
-      
+
       try {
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        developer.log('Saving household changes...', name: 'EditHouseholdScreen');
-        developer.log('Beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
-        developer.log('Before update - beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId}, s_is_sync: ${_beneficiary!.sIsSync}', name: 'EditHouseholdScreen');
-        
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+        developer.log('Saving household changes...',
+            name: 'EditHouseholdScreen');
+        developer.log(
+            'Beneficiary: ${_beneficiary!.firstName} ${_beneficiary!.lastName}',
+            name: 'EditHouseholdScreen');
+        developer.log(
+            'Before update - beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId}, s_is_sync: ${_beneficiary!.sIsSync}',
+            name: 'EditHouseholdScreen');
+
         // Get user ID from token storage
         final userId = await _tokenStorage.getUserId();
-        
+
         // CRITICAL: Only set distribution_date if it's null (first time saving household data)
         // Once set, it should NEVER be changed again
-        final distributionDate = _beneficiary!.distributionDate ?? DateTime.now().toUtc().toIso8601String();
-        
+        final distributionDate = _beneficiary!.distributionDate ??
+            DateTime.now().toUtc().toIso8601String();
+
         // Create updated beneficiary with household data
         // IMPORTANT: Preserve createdDate and createdBy - only update modifiedDate
         final updatedBeneficiary = _beneficiary!.copyWith(
-          deviceSerialNo: _deviceSerialNoController.text.trim().isEmpty 
-              ? null 
+          deviceSerialNo: _deviceSerialNoController.text.trim().isEmpty
+              ? null
               : _deviceSerialNoController.text.trim(),
           latitude: _latitude,
           longitude: _longitude,
@@ -589,7 +637,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           stoveStatusDelivery: _consent1 ? 'yes' : 'no',
           noOtherCookStovePresent: _consent2 ? 'yes' : 'no',
           primaryResidenceConfirmation: _consent3 ? 'yes' : 'no',
-          distributionDate: distributionDate, // Set ONLY on first save, preserve on subsequent updates
+          distributionDate:
+              distributionDate, // Set ONLY on first save, preserve on subsequent updates
           // Preserve createdDate and createdBy from original beneficiary
           createdDate: _beneficiary!.createdDate,
           createdBy: _beneficiary!.createdBy,
@@ -597,35 +646,47 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           modifiedBy: userId,
           sIsSync: 0, // Mark as unsynced since we modified it
         );
-        
-        developer.log('After update - beneficiary_id: ${updatedBeneficiary.beneficiaryId}, offline_id: ${updatedBeneficiary.offlineId}, s_is_sync: ${updatedBeneficiary.sIsSync}', name: 'EditHouseholdScreen');
-        developer.log('Marked as UNSYNCED (s_is_sync = 0)', name: 'EditHouseholdScreen');
-        
+
+        developer.log(
+            'After update - beneficiary_id: ${updatedBeneficiary.beneficiaryId}, offline_id: ${updatedBeneficiary.offlineId}, s_is_sync: ${updatedBeneficiary.sIsSync}',
+            name: 'EditHouseholdScreen');
+        developer.log('Marked as UNSYNCED (s_is_sync = 0)',
+            name: 'EditHouseholdScreen');
+
         // Update in database
         await _beneficiaryRepo.update(updatedBeneficiary);
-        
-        developer.log('Household saved successfully to database', name: 'EditHouseholdScreen');
-        
+
+        developer.log('Household saved successfully to database',
+            name: 'EditHouseholdScreen');
+
         // Reload the complete beneficiary data from database for potential sync
         // CRITICAL: Use specific lookup methods to avoid ID collision
         Beneficiary? reloadedBeneficiary;
-        
+
         if (updatedBeneficiary.beneficiaryId != null) {
-          reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(updatedBeneficiary.beneficiaryId!);
+          reloadedBeneficiary = await _beneficiaryRepo
+              .getByBeneficiaryId(updatedBeneficiary.beneficiaryId!);
         } else if (updatedBeneficiary.offlineId != null) {
-          reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(updatedBeneficiary.offlineId!);
+          reloadedBeneficiary = await _beneficiaryRepo
+              .getByOfflineId(updatedBeneficiary.offlineId!);
         }
-        
+
         if (reloadedBeneficiary != null) {
-          developer.log('Reloaded complete beneficiary data from database', name: 'EditHouseholdScreen');
-          developer.log('Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'EditHouseholdScreen');
-          developer.log('Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}', name: 'EditHouseholdScreen');
+          developer.log('Reloaded complete beneficiary data from database',
+              name: 'EditHouseholdScreen');
+          developer.log(
+              'Reloaded beneficiary - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}',
+              name: 'EditHouseholdScreen');
+          developer.log(
+              'Complete data ready for sync: ${reloadedBeneficiary.toJsonForSync()}',
+              name: 'EditHouseholdScreen');
         }
-        
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        
+
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+
         setState(() => _isSaving = false);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -636,9 +697,10 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           context.pop();
         }
       } catch (e) {
-        developer.log('Error saving household: $e', name: 'EditHouseholdScreen');
+        developer.log('Error saving household: $e',
+            name: 'EditHouseholdScreen');
         setState(() => _isSaving = false);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -661,12 +723,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       );
       return;
     }
-    
+
     // CRITICAL: Check if ALL training sites are synced before allowing household sync
     try {
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
-      
+
       if (!allSynced) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -682,7 +744,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         return;
       }
     } catch (e) {
-      developer.log('Error checking training sites sync status: $e', name: 'EditHouseholdScreen');
+      developer.log('Error checking training sites sync status: $e',
+          name: 'EditHouseholdScreen');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -694,26 +757,26 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
       return;
     }
-    
+
     // Additional check: Verify the specific training site for this household is synced
-    if (_beneficiary!.trainingSite != null && _beneficiary!.trainingSite!.isNotEmpty) {
+    if (_beneficiary!.trainingSite != null) {
       try {
         final trainingSiteRepo = TrainingSiteRepository();
-        final allTrainingSites = await trainingSiteRepo.getAll();
-        
-        // Find the training site by name
-        final trainingSite = allTrainingSites.firstWhere(
-          (site) => site.trainingSite == _beneficiary!.trainingSite,
-          orElse: () => throw Exception('Training site not found'),
-        );
-        
+        final trainingSite =
+            await trainingSiteRepo.getById(_beneficiary!.trainingSite!);
+        if (trainingSite == null) {
+          throw Exception('Training site not found');
+        }
+        final trainingSiteLabel =
+            trainingSite.trainingSite ?? 'ID ${_beneficiary!.trainingSite}';
+
         // Double-check if this specific training site is synced
         if (trainingSite.sIsSync == 0) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Cannot sync household. The training site "${_beneficiary!.trainingSite}" is not synced yet.',
+                  'Cannot sync household. The training site "$trainingSiteLabel" is not synced yet.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 5),
@@ -723,11 +786,13 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           return;
         }
       } catch (e) {
-        developer.log('Error checking specific training site sync status: $e', name: 'EditHouseholdScreen');
+        developer.log('Error checking specific training site sync status: $e',
+            name: 'EditHouseholdScreen');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: Training site "${_beneficiary!.trainingSite}" not found.'),
+              content: Text(
+                  'Error: Training site ID ${_beneficiary!.trainingSite} not found.'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ),
@@ -736,10 +801,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         return;
       }
     }
-    
+
     try {
-      developer.log('Syncing household: ${_beneficiary!.firstName} ${_beneficiary!.lastName}', name: 'EditHouseholdScreen');
-      
+      developer.log(
+          'Syncing household: ${_beneficiary!.firstName} ${_beneficiary!.lastName}',
+          name: 'EditHouseholdScreen');
+
       // Show loading dialog
       if (mounted) {
         showDialog(
@@ -752,95 +819,123 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           ),
         );
       }
-      
+
       // Reload complete beneficiary data from database
       // CRITICAL: Use specific lookup methods to avoid ID collision
       // If beneficiary has beneficiary_id, use getByBeneficiaryId
       // If beneficiary only has offline_id, use getByOfflineId
       Beneficiary? reloadedBeneficiary;
-      
+
       if (_beneficiary!.beneficiaryId != null) {
-        developer.log('Reloading beneficiary for sync using beneficiary_id: ${_beneficiary!.beneficiaryId}', name: 'EditHouseholdScreen');
-        reloadedBeneficiary = await _beneficiaryRepo.getByBeneficiaryId(_beneficiary!.beneficiaryId!);
+        developer.log(
+            'Reloading beneficiary for sync using beneficiary_id: ${_beneficiary!.beneficiaryId}',
+            name: 'EditHouseholdScreen');
+        reloadedBeneficiary = await _beneficiaryRepo
+            .getByBeneficiaryId(_beneficiary!.beneficiaryId!);
       } else if (_beneficiary!.offlineId != null) {
-        developer.log('Reloading beneficiary for sync using offline_id: ${_beneficiary!.offlineId}', name: 'EditHouseholdScreen');
-        reloadedBeneficiary = await _beneficiaryRepo.getByOfflineId(_beneficiary!.offlineId!);
+        developer.log(
+            'Reloading beneficiary for sync using offline_id: ${_beneficiary!.offlineId}',
+            name: 'EditHouseholdScreen');
+        reloadedBeneficiary =
+            await _beneficiaryRepo.getByOfflineId(_beneficiary!.offlineId!);
       } else {
         throw Exception('Beneficiary has no beneficiary_id or offline_id');
       }
-      
+
       if (reloadedBeneficiary == null) {
         throw Exception('Failed to reload beneficiary data');
       }
-      
-      developer.log('Reloaded beneficiary for sync - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}', name: 'EditHouseholdScreen');
-      
+
+      developer.log(
+          'Reloaded beneficiary for sync - beneficiary_id: ${reloadedBeneficiary.beneficiaryId}, offline_id: ${reloadedBeneficiary.offlineId}',
+          name: 'EditHouseholdScreen');
+
       // Convert beneficiary to JSON for sync (send complete data from local DB)
       final beneficiaryJson = reloadedBeneficiary.toJsonForSync();
-      
-      developer.log('Beneficiary sync payload (complete data from local DB): $beneficiaryJson', name: 'EditHouseholdScreen');
-      
+
+      developer.log(
+          'Beneficiary sync payload (complete data from local DB): $beneficiaryJson',
+          name: 'EditHouseholdScreen');
+
       // Sync to server using beneficiaryBeneSync
       final response = await _dataService.beneficiaryBeneSync(
         beneficiaries: [beneficiaryJson],
       );
-      
+
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
-      
+
       if (response.success) {
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        developer.log('Household synced successfully', name: 'EditHouseholdScreen');
-        developer.log('Response data: ${response.data}', name: 'EditHouseholdScreen');
-        developer.log('Current household - beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId}, s_is_sync: ${_beneficiary!.sIsSync}', name: 'EditHouseholdScreen');
-        
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+        developer.log('Household synced successfully',
+            name: 'EditHouseholdScreen');
+        developer.log('Response data: ${response.data}',
+            name: 'EditHouseholdScreen');
+        developer.log(
+            'Current household - beneficiary_id: ${_beneficiary!.beneficiaryId}, offline_id: ${_beneficiary!.offlineId}, s_is_sync: ${_beneficiary!.sIsSync}',
+            name: 'EditHouseholdScreen');
+
         // Try to extract beneficiary_id from response
         int? beneficiaryId;
-        
+
         if (response.data != null) {
           // Response format: {success: true, action: updated, beneficiary_id: 94, message: ...}
           if (response.data!['beneficiary_id'] != null) {
             beneficiaryId = response.data!['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in response: $beneficiaryId', name: 'EditHouseholdScreen');
+            developer.log('Found beneficiary_id in response: $beneficiaryId',
+                name: 'EditHouseholdScreen');
           } else if (response.data!['data'] is Map) {
             // Alternative format: {success: true, data: {beneficiary_id: 94}}
             final dataMap = response.data!['data'] as Map;
             beneficiaryId = dataMap['beneficiary_id'] as int?;
-            developer.log('Found beneficiary_id in data map: $beneficiaryId', name: 'EditHouseholdScreen');
+            developer.log('Found beneficiary_id in data map: $beneficiaryId',
+                name: 'EditHouseholdScreen');
           } else if (response.data!['data'] is List) {
             // Alternative format: {success: true, data: [{beneficiary_id: 94}]}
             final mappings = response.data!['data'] as List;
             if (mappings.isNotEmpty) {
               final mapping = mappings.first;
               beneficiaryId = mapping['beneficiary_id'] as int?;
-              developer.log('Found beneficiary_id in data list: $beneficiaryId', name: 'EditHouseholdScreen');
+              developer.log('Found beneficiary_id in data list: $beneficiaryId',
+                  name: 'EditHouseholdScreen');
             }
           }
         }
-        
+
         // Always mark as synced after successful sync
-        developer.log('Marking household as synced...', name: 'EditHouseholdScreen');
-        
-        if (_beneficiary!.offlineId != null && beneficiaryId != null && _beneficiary!.beneficiaryId == null) {
+        developer.log('Marking household as synced...',
+            name: 'EditHouseholdScreen');
+
+        if (_beneficiary!.offlineId != null &&
+            beneficiaryId != null &&
+            _beneficiary!.beneficiaryId == null) {
           // Has offline_id, got beneficiary_id from server, and doesn't already have beneficiary_id - update with server ID
-          developer.log('Updating offline_id ${_beneficiary!.offlineId} with server beneficiary_id: $beneficiaryId', name: 'EditHouseholdScreen');
-          await _beneficiaryRepo.updateWithServerId(_beneficiary!.offlineId!, beneficiaryId);
+          developer.log(
+              'Updating offline_id ${_beneficiary!.offlineId} with server beneficiary_id: $beneficiaryId',
+              name: 'EditHouseholdScreen');
+          await _beneficiaryRepo.updateWithServerId(
+              _beneficiary!.offlineId!, beneficiaryId);
         } else {
           // Already has beneficiary_id or no beneficiary_id in response - just mark as synced
-          developer.log('Marking as synced (beneficiary_id: ${_beneficiary!.beneficiaryId ?? beneficiaryId})', name: 'EditHouseholdScreen');
+          developer.log(
+              'Marking as synced (beneficiary_id: ${_beneficiary!.beneficiaryId ?? beneficiaryId})',
+              name: 'EditHouseholdScreen');
           final updatedHousehold = _beneficiary!.copyWith(
             sIsSync: 1,
             beneficiaryId: beneficiaryId ?? _beneficiary!.beneficiaryId,
           );
           await _beneficiaryRepo.update(updatedHousehold);
         }
-        
-        developer.log('Update complete, reloading beneficiary...', name: 'EditHouseholdScreen');
-        developer.log('========================================', name: 'EditHouseholdScreen');
-        
+
+        developer.log('Update complete, reloading beneficiary...',
+            name: 'EditHouseholdScreen');
+        developer.log('========================================',
+            name: 'EditHouseholdScreen');
+
         // Reload beneficiary to reflect changes
         await _loadBeneficiary();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -861,12 +956,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       }
     } catch (e) {
       developer.log('Error syncing household: $e', name: 'EditHouseholdScreen');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -890,7 +985,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         ),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4EA),
       body: Stack(
@@ -916,12 +1011,14 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
               children: [
                 // Top Bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
                       GestureDetector(
                         onTap: () => context.pop(),
-                        child: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+                        child: const Icon(Icons.arrow_back_ios,
+                            color: Colors.black87, size: 20),
                       ),
                       const Expanded(
                         child: Text(
@@ -934,8 +1031,6 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                           ),
                         ),
                       ),
-                    
-                      
                       Container(
                         width: 34,
                         height: 34,
@@ -947,7 +1042,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                             width: 1,
                           ),
                         ),
-                        child: const Icon(Icons.question_mark_rounded, color: Colors.white, size: 18),
+                        child: const Icon(Icons.question_mark_rounded,
+                            color: Colors.white, size: 18),
                       ),
                     ],
                   ),
@@ -1058,7 +1154,9 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _isDeviceSerialNoDuplicate ? Colors.red : const Color(0xFFE0E0E0),
+                  color: _isDeviceSerialNoDuplicate
+                      ? Colors.red
+                      : const Color(0xFFE0E0E0),
                 ),
               ),
               child: TextFormField(
@@ -1067,7 +1165,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                 decoration: const InputDecoration(
                   hintText: 'Enter Device Serial No (A-Z, 0-9)',
                   hintStyle: TextStyle(color: Colors.black38, fontSize: 14),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: InputBorder.none,
                 ),
                 validator: (value) {
@@ -1078,7 +1177,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                       return 'Only alphanumeric characters (A-Z, 0-9) are allowed';
                     }
                   }
-                  
+
                   return null;
                 },
               ),
@@ -1093,7 +1192,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                       height: 12,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.grey.shade600),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.grey.shade600),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1107,22 +1207,31 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   ],
                 ),
               ),
-            if (!_isDeviceSerialNoChecking && _deviceSerialNoController.text.trim().isNotEmpty)
+            if (!_isDeviceSerialNoChecking &&
+                _deviceSerialNoController.text.trim().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4, left: 4),
                 child: Row(
                   children: [
                     Icon(
-                      _isDeviceSerialNoDuplicate ? Icons.error : Icons.check_circle,
+                      _isDeviceSerialNoDuplicate
+                          ? Icons.error
+                          : Icons.check_circle,
                       size: 14,
-                      color: _isDeviceSerialNoDuplicate ? Colors.red : Colors.green,
+                      color: _isDeviceSerialNoDuplicate
+                          ? Colors.red
+                          : Colors.green,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _isDeviceSerialNoDuplicate ? 'Already exists' : 'Available',
+                      _isDeviceSerialNoDuplicate
+                          ? 'Already exists'
+                          : 'Available',
                       style: TextStyle(
                         fontSize: 11,
-                        color: _isDeviceSerialNoDuplicate ? Colors.red : Colors.green,
+                        color: _isDeviceSerialNoDuplicate
+                            ? Colors.red
+                            : Colors.green,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1139,7 +1248,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     final gpsText = (_latitude != null && _longitude != null)
         ? 'GPS: $_latitude, $_longitude'
         : 'GPS: Not captured';
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1176,8 +1285,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: (_latitude != null && _longitude != null) 
-                          ? Colors.grey.shade600 
+                      color: (_latitude != null && _longitude != null)
+                          ? Colors.grey.shade600
                           : Colors.red.shade600,
                     ),
                   ),
@@ -1192,8 +1301,10 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
             ),
@@ -1217,11 +1328,12 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     } else if (title.contains('COOK STOVE')) {
       imagePath = _cookStoveImagePath;
     }
-    
-    final bool hasServerImage = imagePath != null && imagePath.startsWith('/uploads/');
+
+    final bool hasServerImage =
+        imagePath != null && imagePath.startsWith('/uploads/');
     final bool hasLocalImage = image != null;
     final bool hasAnyImage = hasServerImage || hasLocalImage;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1247,7 +1359,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        
+
         // Image Preview Container
         Container(
           width: double.infinity,
@@ -1265,7 +1377,10 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
             children: [
               // Dashed border container for image
               GestureDetector(
-                onTap: hasAnyImage ? () => _showImagePreview(context, hasLocalImage ? image : null, imagePath) : null,
+                onTap: hasAnyImage
+                    ? () => _showImagePreview(
+                        context, hasLocalImage ? image : null, imagePath)
+                    : null,
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1293,7 +1408,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                                 child: hasLocalImage
                                     ? Image.file(image, fit: BoxFit.cover)
                                     : NetworkImageWithRetry(
-                                        imageUrl: '${ApiConstants.baseUrl}$imagePath',
+                                        imageUrl:
+                                            '${ApiConstants.baseUrl}$imagePath',
                                         fit: BoxFit.cover,
                                       ),
                               )
@@ -1301,10 +1417,13 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+                                    Icon(Icons.image,
+                                        size: 48, color: Colors.grey.shade400),
                                     const SizedBox(height: 8),
                                     Text(
-                                      title.contains('HOUSE') ? 'Take House Image' : 'Take Cook Stove Image',
+                                      title.contains('HOUSE')
+                                          ? 'Take House Image'
+                                          : 'Take Cook Stove Image',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey.shade600,
@@ -1318,7 +1437,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                       if (hasAnyImage)
                         IgnorePointer(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(8),
@@ -1337,7 +1457,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   ),
                 ),
               ),
-              
+
               if (timestamp != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -1349,9 +1469,9 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   ),
                 ),
               ],
-              
+
               const SizedBox(height: 16),
-              
+
               // Take Photo / Retake Button
               SizedBox(
                 width: double.infinity,
@@ -1363,14 +1483,15 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                     backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               // Remove Button (only show if image exists)
               if (hasAnyImage) ...[
                 SizedBox(
@@ -1383,22 +1504,25 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                       foregroundColor: const Color(0xFF4CAF50),
                       side: const BorderSide(color: Color(0xFF4CAF50)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
               ],
-              
+
               // Info message
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                  Icon(Icons.info_outline,
+                      size: 16, color: Colors.grey.shade600),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Ensure all details are clearly visible',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
                   ),
                 ],
@@ -1431,27 +1555,25 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          
           _buildConsentToggle(
-            text: 'I can confirm that the household has only received 1 cookstove and that the cookstove was delivered in good condition and in full working order',
+            text:
+                'I can confirm that the household has only received 1 cookstove and that the cookstove was delivered in good condition and in full working order',
             value: _consent1,
             onChanged: (value) => setState(() => _consent1 = value),
             isRequired: false,
           ),
-          
           const SizedBox(height: 16),
-          
           _buildConsentToggle(
-            text: 'I confirm I performed a visual inspection of the household and that no other cookstove from any other company was found or was deemed to have recently removed from the household',
+            text:
+                'I confirm I performed a visual inspection of the household and that no other cookstove from any other company was found or was deemed to have recently removed from the household',
             value: _consent2,
             onChanged: (value) => setState(() => _consent2 = value),
             isRequired: false,
           ),
-          
           const SizedBox(height: 16),
-          
           _buildConsentToggle(
-            text: 'I can confirm that the beneficiary lives at this household and that they are the primary resident of this household',
+            text:
+                'I can confirm that the beneficiary lives at this household and that they are the primary resident of this household',
             value: _consent3,
             onChanged: (value) => setState(() => _consent3 = value),
             isRequired: false,
@@ -1503,7 +1625,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
 
   Widget _buildSaveButton() {
     final isSynced = _beneficiary?.sIsSync == 1;
-    
+
     return Column(
       children: [
         // Sync status indicator
@@ -1527,8 +1649,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         //         const SizedBox(width: 8),
         //         Expanded(
         //           child: Text(
-        //             isSynced 
-        //                 ? 'This household is synced with the server' 
+        //             isSynced
+        //                 ? 'This household is synced with the server'
         //                 : 'This household is not synced. Save and sync to upload changes.',
         //             style: TextStyle(
         //               fontSize: 13,
@@ -1542,7 +1664,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
         //   ),
         //   const SizedBox(height: 16),
         // ],
-        
+
         // Save button
         SizedBox(
           width: double.infinity,
@@ -1552,7 +1674,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 0,
               disabledBackgroundColor: Colors.grey,
             ),
@@ -1571,7 +1694,7 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
                   ),
           ),
         ),
-        
+
         // Sync button (only show if not synced)
         // if (!isSynced && _beneficiary != null) ...[
         //   const SizedBox(height: 12),
@@ -1593,15 +1716,30 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
       ],
     );
   }
-  
+
   String _formatTimestamp(String isoTimestamp) {
     try {
       final dateTime = DateTime.parse(isoTimestamp).toLocal();
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       final day = dateTime.day;
       final month = months[dateTime.month - 1];
       final year = dateTime.year;
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final hour = dateTime.hour > 12
+          ? dateTime.hour - 12
+          : (dateTime.hour == 0 ? 12 : dateTime.hour);
       final minute = dateTime.minute.toString().padLeft(2, '0');
       final period = dateTime.hour >= 12 ? 'PM' : 'AM';
       return '$day $month $year, ${hour.toString().padLeft(2, '0')}:$minute $period';
@@ -1610,7 +1748,8 @@ class _EditHouseholdScreenState extends State<EditHouseholdScreen> {
     }
   }
 
-  void _showImagePreview(BuildContext context, File? localImage, String? serverImagePath) {
+  void _showImagePreview(
+      BuildContext context, File? localImage, String? serverImagePath) {
     showDialog(
       context: context,
       builder: (context) => Dialog(

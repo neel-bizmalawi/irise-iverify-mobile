@@ -1,7 +1,7 @@
 class Beneficiary {
   final int? id;
   final int? beneficiaryId;
-  final String? trainingSite;
+  final int? trainingSite;
   final int? mUserId;
   final int? mSiteId;
   final String? firstName;
@@ -95,6 +95,22 @@ class Beneficiary {
     this.distributionDate,
   });
 
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    if (value is double) return value.toInt();
+    return null;
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
       'beneficiary_id': beneficiaryId,
@@ -142,31 +158,31 @@ class Beneficiary {
       'server_time': serverTime,
       'distribution_date': distributionDate,
     };
-    
+
     // Only include offline_id if it has a value
     // This allows SQLite to auto-generate it when null
     if (offlineId != null) {
       map['offline_id'] = offlineId;
     }
-    
+
     return map;
   }
 
   factory Beneficiary.fromMap(Map<String, dynamic> map) {
     return Beneficiary(
       id: map['id'] as int?,
-      beneficiaryId: map['beneficiary_id'] as int?,
-      trainingSite: map['training_site'] as String?,
-      mUserId: map['m_user_id'] as int?,
-      mSiteId: map['m_site_id'] as int?,
+      beneficiaryId: _parseInt(map['beneficiary_id']),
+      trainingSite: _parseInt(map['training_site']),
+      mUserId: _parseInt(map['m_user_id']),
+      mSiteId: _parseInt(map['m_site_id']),
       firstName: map['first_name'] as String?,
       lastName: map['last_name'] as String?,
       mobileNo: map['mobile_no'] as String?,
       otherCookstove: map['other_cookstove'] as String?,
-      femalesBelow18: map['females_below_18'] as int?,
-      femalesAbove18: map['females_above_18'] as int?,
-      malesBelow18: map['males_below_18'] as int?,
-      malesAbove18: map['males_above_18'] as int?,
+      femalesBelow18: _parseInt(map['females_below_18']),
+      femalesAbove18: _parseInt(map['females_above_18']),
+      malesBelow18: _parseInt(map['males_below_18']),
+      malesAbove18: _parseInt(map['males_above_18']),
       cookingMethod: map['cooking_method'] as String?,
       districtName: map['district_name'] as String?,
       nationalId: map['national_id'] as String?,
@@ -174,7 +190,7 @@ class Beneficiary {
       housePic: map['house_pic'] as String?,
       cookstovePic: map['cookstove_pic'] as String?,
       signature: map['signature'] as String?,
-      empId: map['emp_id'] as int?,
+      empId: _parseInt(map['emp_id']),
       language: map['language'] as String?,
       readDoc: map['read_doc'] as String?,
       understoodDoc: map['understood_doc'] as String?,
@@ -182,22 +198,23 @@ class Beneficiary {
       readToYou: map['read_to_you'] as String?,
       stoveStatusDelivery: map['stove_status_delivery'] as String?,
       noOtherCookStovePresent: map['no_other_cook_stove_present'] as String?,
-      primaryResidenceConfirmation: map['primary_residence_confirmation'] as String?,
+      primaryResidenceConfirmation:
+          map['primary_residence_confirmation'] as String?,
       cookstovePicTimestamp: map['cookstove_pic_timestamp'] as String?,
       housePicTimestamp: map['house_pic_timestamp'] as String?,
       nationalIdTimestamp: map['national_id_timestamp'] as String?,
       signatureTimestamp: map['signature_timestamp'] as String?,
       deviceSerialNo: map['device_serial_no'] as String?,
-      latitude: map['latitude'] as double?,
-      longitude: map['longitude'] as double?,
+      latitude: _parseDouble(map['latitude']),
+      longitude: _parseDouble(map['longitude']),
       geoAddress: map['geo_address'] as String?,
       createdDate: map['created_date'] as String?,
-      createdBy: map['created_by'] as int?,
+      createdBy: _parseInt(map['created_by']),
       modifiedDate: map['modified_date'] as String?,
-      modifiedBy: map['modified_by'] as int?,
+      modifiedBy: _parseInt(map['modified_by']),
       status: map['status'] as String?,
-      sIsSync: map['s_is_sync'] as int?,
-      offlineId: map['offline_id'] as int?,
+      sIsSync: _parseInt(map['s_is_sync']),
+      offlineId: _parseInt(map['offline_id']),
       serverTime: map['server_time'] as String?,
       distributionDate: map['distribution_date'] as String?,
     );
@@ -208,7 +225,7 @@ class Beneficiary {
   Map<String, dynamic> toJsonForSync() {
     // Determine if this is a new record (no beneficiary_id) or an update (has beneficiary_id)
     final isNewRecord = beneficiaryId == null;
-    
+
     return {
       // CRITICAL: Always include offline_id for server mapping
       'offline_id': offlineId,
@@ -288,27 +305,9 @@ class Beneficiary {
   }
 
   factory Beneficiary.fromJson(Map<String, dynamic> json) {
-    // Helper function to safely parse int from dynamic value
-    int? _parseInt(dynamic value) {
-      if (value == null) return null;
-      if (value is int) return value;
-      if (value is String) return int.tryParse(value);
-      if (value is double) return value.toInt();
-      return null;
-    }
-    
-    // Helper function to safely parse double from dynamic value
-    double? _parseDouble(dynamic value) {
-      if (value == null) return null;
-      if (value is double) return value;
-      if (value is int) return value.toDouble();
-      if (value is String) return double.tryParse(value);
-      return null;
-    }
-    
     return Beneficiary(
       beneficiaryId: _parseInt(json['beneficiary_id']),
-      trainingSite: json['training_site'] as String?,
+      trainingSite: _parseInt(json['training_site']),
       mUserId: _parseInt(json['m_user_id']),
       mSiteId: _parseInt(json['m_site_id']),
       firstName: json['first_name'] as String?,
@@ -334,7 +333,8 @@ class Beneficiary {
       readToYou: json['read_to_you'] as String?,
       stoveStatusDelivery: json['stove_status_delivery'] as String?,
       noOtherCookStovePresent: json['no_other_cook_stove_present'] as String?,
-      primaryResidenceConfirmation: json['primary_residence_confirmation'] as String?,
+      primaryResidenceConfirmation:
+          json['primary_residence_confirmation'] as String?,
       cookstovePicTimestamp: json['cookstove_pic_timestamp'] as String?,
       housePicTimestamp: json['house_pic_timestamp'] as String?,
       nationalIdTimestamp: json['national_id_timestamp'] as String?,
@@ -357,7 +357,7 @@ class Beneficiary {
   Beneficiary copyWith({
     int? id,
     int? beneficiaryId,
-    String? trainingSite,
+    int? trainingSite,
     int? mUserId,
     int? mSiteId,
     String? firstName,
@@ -430,9 +430,12 @@ class Beneficiary {
       empSign: empSign ?? this.empSign,
       readToYou: readToYou ?? this.readToYou,
       stoveStatusDelivery: stoveStatusDelivery ?? this.stoveStatusDelivery,
-      noOtherCookStovePresent: noOtherCookStovePresent ?? this.noOtherCookStovePresent,
-      primaryResidenceConfirmation: primaryResidenceConfirmation ?? this.primaryResidenceConfirmation,
-      cookstovePicTimestamp: cookstovePicTimestamp ?? this.cookstovePicTimestamp,
+      noOtherCookStovePresent:
+          noOtherCookStovePresent ?? this.noOtherCookStovePresent,
+      primaryResidenceConfirmation:
+          primaryResidenceConfirmation ?? this.primaryResidenceConfirmation,
+      cookstovePicTimestamp:
+          cookstovePicTimestamp ?? this.cookstovePicTimestamp,
       housePicTimestamp: housePicTimestamp ?? this.housePicTimestamp,
       nationalIdTimestamp: nationalIdTimestamp ?? this.nationalIdTimestamp,
       signatureTimestamp: signatureTimestamp ?? this.signatureTimestamp,

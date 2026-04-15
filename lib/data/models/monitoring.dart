@@ -1,4 +1,5 @@
 class Monitoring {
+  final int? offlineId;
   final int? monitoringId;
   final int? userId;
   final int? beneficiaryId;
@@ -43,6 +44,7 @@ class Monitoring {
   final String? modifiedByName;
 
   Monitoring({
+    this.offlineId,
     this.monitoringId,
     this.userId,
     this.beneficiaryId,
@@ -96,49 +98,55 @@ class Monitoring {
       return null;
     }
 
+    String? parseString(dynamic value) {
+      if (value == null) return null;
+      return value.toString();
+    }
+
     return Monitoring(
+      offlineId: parseInt(json['offline_id']),
       monitoringId: parseInt(json['monitoring_id']),
       userId: parseInt(json['user_id']),
       beneficiaryId: parseInt(json['beneficiary_id']),
-      nationalId: json['national_id'] as String?,
-      agentName: json['agent_name'] as String?,
-      visitAt: json['visit_at'] as String?,
-      oldGpsLat: json['old_gps_lat'] as String?,
-      oldGpsLng: json['old_gps_lng'] as String?,
-      newGpsLat: json['new_gps_lat'] as String?,
-      newGpsLng: json['new_gps_lng'] as String?,
-      deviceSerialNo: json['device_serial_no'] as String?,
-      newDeviceSerialNo: json['new_device_serial_no'] as String?,
-      hhNameSame: json['hh_name_same'] as String?,
-      stovesPresent: json['stoves_present'] as String?,
-      stoveBeingUsed: json['stove_being_used'] as String?,
+      nationalId: parseString(json['national_id']),
+      agentName: parseString(json['agent_name']),
+      visitAt: parseString(json['visit_at']),
+      oldGpsLat: parseString(json['old_gps_lat']),
+      oldGpsLng: parseString(json['old_gps_lng']),
+      newGpsLat: parseString(json['new_gps_lat']),
+      newGpsLng: parseString(json['new_gps_lng']),
+      deviceSerialNo: parseString(json['device_serial_no']),
+      newDeviceSerialNo: parseString(json['new_device_serial_no']),
+      hhNameSame: parseString(json['hh_name_same']),
+      stovesPresent: parseString(json['stoves_present']),
+      stoveBeingUsed: parseString(json['stove_being_used']),
       timesUsedToday: parseInt(json['times_used_today']),
-      stoveCondition: json['stove_condition'] as String?,
-      photoUrl: json['photo_url'] as String?,
-      nfcTagStatus: json['nfc_tag_status'] as String?,
-      userSatisfaction: json['user_satisfaction'] as String?,
-      fuelType: json['fuel_type'] as String?,
+      stoveCondition: parseString(json['stove_condition']),
+      photoUrl: parseString(json['photo_url']),
+      nfcTagStatus: parseString(json['nfc_tag_status']),
+      userSatisfaction: parseString(json['user_satisfaction']),
+      fuelType: parseString(json['fuel_type']),
       dailyFuelCost: parseInt(json['daily_fuel_cost']),
       savings3Months: parseInt(json['savings_3_months']),
       estFuelLast3mealsKg: parseInt(json['est_fuel_last3meals_kg']),
-      needsTraining: json['needs_training'] as String?,
-      trainingType: json['training_type'] as String?,
-      trainingPerformed: json['training_performed'] as String?,
-      trainingNotDoneReason: json['training_not_done_reason'] as String?,
-      needsMoreVisits: json['needs_more_visits'] as String?,
-      moreVisitsReason: json['more_visits_reason'] as String?,
-      healthHospitalLess: json['health_hospital_less'] as String?,
-      healthBetterAir: json['health_better_air'] as String?,
-      photoPath: json['photo_path'] as String?,
+      needsTraining: parseString(json['needs_training']),
+      trainingType: parseString(json['training_type']),
+      trainingPerformed: parseString(json['training_performed']),
+      trainingNotDoneReason: parseString(json['training_not_done_reason']),
+      needsMoreVisits: parseString(json['needs_more_visits']),
+      moreVisitsReason: parseString(json['more_visits_reason']),
+      healthHospitalLess: parseString(json['health_hospital_less']),
+      healthBetterAir: parseString(json['health_better_air']),
+      photoPath: parseString(json['photo_path']),
       sIsSync: parseInt(json['s_is_sync']),
-      createdDate: json['created_date'] as String?,
+      createdDate: parseString(json['created_date']),
       createdBy: parseInt(json['created_by']),
-      modifiedDate: json['modified_date'] as String?,
+      modifiedDate: parseString(json['modified_date']),
       modifiedBy: parseInt(json['modified_by']),
-      serverTime: json['server_time'] as String?,
-      status: json['status'] as String?,
-      createdByName: json['created_by_name'] as String?,
-      modifiedByName: json['modified_by_name'] as String?,
+      serverTime: parseString(json['server_time']),
+      status: parseString(json['status']),
+      createdByName: parseString(json['created_by_name']),
+      modifiedByName: parseString(json['modified_by_name']),
     );
   }
 
@@ -152,6 +160,7 @@ class Monitoring {
     }
 
     return Monitoring(
+      offlineId: parseInt(map['offline_id']),
       monitoringId: parseInt(map['monitoring_id']),
       userId: parseInt(map['user_id']),
       beneficiaryId: parseInt(map['beneficiary_id']),
@@ -198,7 +207,7 @@ class Monitoring {
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'monitoring_id': monitoringId,
       'user_id': userId,
       'beneficiary_id': beneficiaryId,
@@ -240,9 +249,16 @@ class Monitoring {
       'server_time': serverTime,
       'status': status,
     };
+
+    if (offlineId != null) {
+      map['offline_id'] = offlineId;
+    }
+
+    return map;
   }
 
   Monitoring copyWith({
+    int? offlineId,
     int? monitoringId,
     int? userId,
     int? beneficiaryId,
@@ -287,6 +303,7 @@ class Monitoring {
     String? modifiedByName,
   }) {
     return Monitoring(
+      offlineId: offlineId ?? this.offlineId,
       monitoringId: monitoringId ?? this.monitoringId,
       userId: userId ?? this.userId,
       beneficiaryId: beneficiaryId ?? this.beneficiaryId,
@@ -314,7 +331,8 @@ class Monitoring {
       needsTraining: needsTraining ?? this.needsTraining,
       trainingType: trainingType ?? this.trainingType,
       trainingPerformed: trainingPerformed ?? this.trainingPerformed,
-      trainingNotDoneReason: trainingNotDoneReason ?? this.trainingNotDoneReason,
+      trainingNotDoneReason:
+          trainingNotDoneReason ?? this.trainingNotDoneReason,
       needsMoreVisits: needsMoreVisits ?? this.needsMoreVisits,
       moreVisitsReason: moreVisitsReason ?? this.moreVisitsReason,
       healthHospitalLess: healthHospitalLess ?? this.healthHospitalLess,

@@ -11,6 +11,7 @@ import 'package:irise/view/screen/login.dart';
 import 'package:irise/view/screen/modules.dart';
 import 'package:irise/view/screen/monitoring.dart';
 import 'package:irise/view/screen/monitoring_form.dart';
+import 'package:irise/data/models/monitoring.dart' as monitoring_model;
 import 'package:irise/view/screen/splash.dart';
 import 'package:irise/view/screen/training_point_identification.dart';
 import 'package:irise/view/screen/audit_list.dart';
@@ -72,7 +73,7 @@ GoRouter createRouter(AuthProvider authProvider) {
               transitionsBuilder: _slideUpTransition,
             ),
           ),
-          
+
           // Beneficiary
           GoRoute(
             path: 'beneficiary_list',
@@ -219,7 +220,15 @@ GoRouter createRouter(AuthProvider authProvider) {
         name: 'monitoringForm',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const MonitoringFormScreen(),
+          child: MonitoringFormScreen(
+            existingMonitoring: state.extra is monitoring_model.Monitoring
+                ? state.extra as monitoring_model.Monitoring
+                : null,
+            offlineId:
+                int.tryParse(state.uri.queryParameters['offlineId'] ?? ''),
+            monitoringId:
+                int.tryParse(state.uri.queryParameters['monitoringId'] ?? ''),
+          ),
           transitionsBuilder: _slideUpTransition,
         ),
       ),
