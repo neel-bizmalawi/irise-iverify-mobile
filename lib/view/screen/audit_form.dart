@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'dart:developer' as developer;
 import '../../data/repositories/audit_repository.dart';
@@ -10,7 +11,16 @@ import '../../core/utils/image_utils.dart';
 import '../widgets/simple_dropdown.dart';
 
 class AuditFormScreen extends StatefulWidget {
-  const AuditFormScreen({super.key});
+  final Audit? existingAudit;
+  final int? offlineId;
+  final int? auditId;
+
+  const AuditFormScreen({
+    super.key,
+    this.existingAudit,
+    this.offlineId,
+    this.auditId,
+  });
 
   @override
   State<AuditFormScreen> createState() => _AuditFormScreenState();
@@ -63,6 +73,12 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
 
   // Loading
   bool _isSaving = false;
+  bool _isLoading = false;
+  Audit? _editingAudit;
+  bool get _isEditMode =>
+      widget.existingAudit != null ||
+      widget.offlineId != null ||
+      widget.auditId != null;
 
   final List<String> _cookingMethods = [
     'Threestone Fire',
@@ -81,6 +97,15 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _editingAudit = widget.existingAudit;
+    if (_isEditMode) {
+      _loadExistingAuditForEdit();
+    }
+  }
+
+  @override
   void dispose() {
     _householdNameController.dispose();
     _nationalIdController.dispose();
@@ -93,6 +118,85 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
     _whereReceivedController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadExistingAuditForEdit() async {
+    setState(() => _isLoading = true);
+    Audit? audit = _editingAudit ?? widget.existingAudit;
+
+    try {
+      if (audit?.offlineId != null || widget.offlineId != null) {
+        audit = await _auditRepository.getByOfflineId(
+              audit?.offlineId ?? widget.offlineId!,
+            ) ??
+            audit;
+      }
+
+      if (audit == null && (widget.auditId != null || audit?.auditId != null)) {
+        audit = await _auditRepository.getById(
+              audit?.auditId ?? widget.auditId!,
+            ) ??
+            audit;
+      }
+    } catch (e) {
+      developer.log('Error reloading audit for edit: $e', name: 'AuditForm');
+    }
+
+    audit ??= widget.existingAudit;
+    if (audit == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    _editingAudit = audit;
+    _populateFormForEdit(audit);
+    setState(() => _isLoading = false);
+  }
+
+  void _populateFormForEdit(Audit audit) {
+    if (!mounted) return;
+
+    setState(() {
+      _householdNameController.text = audit.householdName ?? '';
+      _nationalIdController.text = audit.nationalId ?? '';
+      _phoneController.text = audit.phoneNumber ?? '';
+      _visitDate =
+          audit.visitDate != null ? DateTime.tryParse(audit.visitDate!) : null;
+      _femalesBelow18Controller.text = audit.femalesBelow18?.toString() ?? '';
+      _femalesAbove18Controller.text = audit.femalesAbove18?.toString() ?? '';
+      _malesBelow18Controller.text = audit.malesBelow18?.toString() ?? '';
+      _malesAbove18Controller.text = audit.malesAbove18?.toString() ?? '';
+      _cookingMethodBefore = audit.cookingMethodBefore;
+      _fuelUsedBefore = audit.fuelUsedBefore;
+      _otherCookingDevice =
+          (audit.otherCookingDeviceBefore ?? '').toLowerCase() == 'yes';
+      _paymentRequested = (audit.paymentRequested ?? '').toLowerCase() == 'yes';
+      _trainingBeforeReceiving =
+          (audit.trainingBeforeReceiving ?? '').toLowerCase() == 'yes';
+      _whereTrainedController.text = audit.whereTrained ?? '';
+      _cookstoveReceivedDate = audit.dateOfCookstoveRecieved != null
+          ? DateTime.tryParse(audit.dateOfCookstoveRecieved!)
+          : null;
+      _whereReceivedController.text = audit.whereReceived ?? '';
+      _readConsent = (audit.readConset ?? '').toLowerCase() == 'yes';
+      _signConsent = (audit.signConsent ?? '').toLowerCase() == 'yes';
+      _deliveredCondition =
+          (audit.deliveredCondition ?? '').toLowerCase() == 'yes';
+      _hasCookstoveObserve =
+          (audit.hasCookstoveObserve ?? '').toLowerCase() == 'yes';
+      _latitude = double.tryParse(audit.latitude ?? '');
+      _longitude = double.tryParse(audit.longitude ?? '');
+      _cookStoveImagePath = audit.photoPathCookStove;
+      _cookStoveImage = audit.photoPathCookStove != null &&
+              audit.photoPathCookStove!.isNotEmpty
+          ? File(audit.photoPathCookStove!)
+          : null;
+      _cookStoveAreaImagePath = audit.photoPathCookStoveArea;
+      _cookStoveAreaImage = audit.photoPathCookStoveArea != null &&
+              audit.photoPathCookStoveArea!.isNotEmpty
+          ? File(audit.photoPathCookStoveArea!)
+          : null;
+    });
   }
 
   Future<void> _selectDate(BuildContext context, bool isVisitDate) async {
@@ -128,27 +232,40 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
     setState(() => _isCapturingGPS = true);
 
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('Location services are disabled');
+      var permission = await Permission.location.status;
+      if (permission.isDenied) {
+        permission = await Permission.location.request();
       }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied');
+      if (!permission.isGranted) {
+        setState(() => _isCapturingGPS = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
+        return;
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied');
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+            ),
+          ),
+        );
       }
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
       );
+
+      if (mounted) Navigator.of(context).pop();
 
       setState(() {
         _latitude = position.latitude;
@@ -158,13 +275,18 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('GPS captured successfully'),
-            backgroundColor: Color(0xFF4CAF50),
+          SnackBar(
+            content: Text(
+              'GPS captured: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+            ),
+            backgroundColor: const Color(0xFF4CAF50),
           ),
         );
       }
     } catch (e) {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
       setState(() => _isCapturingGPS = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -321,37 +443,49 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
         fuelUsedBefore: _fuelUsedBefore,
         otherCookingDeviceBefore: _otherCookingDevice ? 'yes' : 'no',
         paymentRequested: _paymentRequested ? 'yes' : 'no',
-        paymentRequestedBy: _paymentRequested ? _householdNameController.text.trim() : null,
+        paymentRequestedBy:
+            _paymentRequested ? _householdNameController.text.trim() : null,
         trainingBeforeReceiving: _trainingBeforeReceiving ? 'yes' : 'no',
         readConset: _readConsent ? 'yes' : 'no',
         signConsent: _signConsent ? 'yes' : 'no',
         deliveredCondition: _deliveredCondition ? 'yes' : 'no',
         dateOfCookstoveRecieved: _cookstoveReceivedDate?.toIso8601String(),
-        whereReceived: _whereReceivedController.text.trim().isEmpty 
-            ? null 
+        whereReceived: _whereReceivedController.text.trim().isEmpty
+            ? null
             : _whereReceivedController.text.trim(),
-        whereTrained: _whereTrainedController.text.trim().isEmpty 
-            ? null 
+        whereTrained: _whereTrainedController.text.trim().isEmpty
+            ? null
             : _whereTrainedController.text.trim(),
         latitude: _latitude.toString(),
         longitude: _longitude.toString(),
         photoPathCookStove: _cookStoveImagePath,
         photoPathCookStoveArea: _cookStoveAreaImagePath,
         sIsSync: 0, // Mark as unsynced
-        status: 'active',
-        createdDate: DateTime.now().toIso8601String(),
+        status: _editingAudit?.status ?? 'active',
+        createdDate:
+            _editingAudit?.createdDate ?? DateTime.now().toIso8601String(),
+        modifiedDate: DateTime.now().toIso8601String(),
+        offlineId: _editingAudit?.offlineId,
+        auditId: _editingAudit?.auditId,
       );
 
       // Save to local database
-      await _auditRepository.insert(audit);
+      if (_isEditMode) {
+        await _auditRepository.update(audit);
+      } else {
+        await _auditRepository.insert(audit);
+      }
 
-      developer.log('Audit saved to local database successfully', name: 'AuditForm');
+      developer.log('Audit ${_isEditMode ? 'updated' : 'saved'} successfully',
+          name: 'AuditForm');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Audit saved successfully'),
-            backgroundColor: Color(0xFF4CAF50),
+          SnackBar(
+            content: Text(_isEditMode
+                ? 'Audit updated successfully!'
+                : 'Audit saved successfully'),
+            backgroundColor: const Color(0xFF4CAF50),
           ),
         );
         context.pop(true); // Return true to indicate success
@@ -375,6 +509,17 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFEAF4EA),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4EA),
       body: Stack(
@@ -400,18 +545,20 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
               children: [
                 // Top bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
                       GestureDetector(
                         onTap: () => context.pop(),
-                        child: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+                        child: const Icon(Icons.arrow_back_ios,
+                            color: Colors.black87, size: 20),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Audit Process',
+                          _isEditMode ? 'Edit Audit' : 'Audit Process',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
@@ -426,7 +573,8 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           color: Colors.black87,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.question_mark, color: Colors.white, size: 12),
+                        child: const Icon(Icons.question_mark,
+                            color: Colors.white, size: 12),
                       ),
                     ],
                   ),
@@ -452,7 +600,6 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-
                         _buildTextField(
                           label: 'NATIONAL ID',
                           controller: _nationalIdController,
@@ -465,7 +612,6 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-
                         _buildTextField(
                           label: 'MOBILE NUMBER',
                           controller: _phoneController,
@@ -479,7 +625,6 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-
                         _buildDateField(
                           label: 'DATE OF VISIT',
                           hint: 'Select Date',
@@ -487,7 +632,6 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           onTap: () => _selectDate(context, true),
                         ),
                         const SizedBox(height: 16),
-
                         Row(
                           children: [
                             Expanded(
@@ -510,7 +654,6 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-
                         Row(
                           children: [
                             Expanded(
@@ -533,53 +676,52 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-
                         _buildDropdown(
                           label: 'COOKING METHOD BEFORE RECEIVING COOKSTOVE.',
                           value: _cookingMethodBefore,
                           items: _cookingMethods,
                           hint: 'Select Cooking Method',
-                          onChanged: (value) => setState(() => _cookingMethodBefore = value),
+                          onChanged: (value) =>
+                              setState(() => _cookingMethodBefore = value),
                         ),
                         const SizedBox(height: 16),
-
                         _buildDropdown(
                           label: 'FUEL USED BEFORE RECEIVING COOKSTOVE.',
                           value: _fuelUsedBefore,
                           items: _fuelTypes,
                           hint: 'Select Fuel',
-                          onChanged: (value) => setState(() => _fuelUsedBefore = value),
+                          onChanged: (value) =>
+                              setState(() => _fuelUsedBefore = value),
                         ),
                         const SizedBox(height: 16),
-
                         _buildToggle(
                           label: 'Other Cooking device before',
                           value: _otherCookingDevice,
-                          onChanged: (value) => setState(() => _otherCookingDevice = value),
+                          onChanged: (value) =>
+                              setState(() => _otherCookingDevice = value),
                         ),
                         const SizedBox(height: 8),
-
                         _buildToggle(
                           label: 'Was any payment requested for the cookstove?',
                           value: _paymentRequested,
-                          onChanged: (value) => setState(() => _paymentRequested = value),
+                          onChanged: (value) =>
+                              setState(() => _paymentRequested = value),
                         ),
                         const SizedBox(height: 8),
-
                         _buildToggle(
-                          label: 'Did HH undergo training before receiving cookstove?',
+                          label:
+                              'Did HH undergo training before receiving cookstove?',
                           value: _trainingBeforeReceiving,
-                          onChanged: (value) => setState(() => _trainingBeforeReceiving = value),
+                          onChanged: (value) =>
+                              setState(() => _trainingBeforeReceiving = value),
                         ),
                         const SizedBox(height: 16),
-
                         _buildTextField(
                           label: 'WHERE TRAINED (LOCATION)',
                           controller: _whereTrainedController,
                           hint: 'Enter Trained Location',
                         ),
                         const SizedBox(height: 16),
-
                         _buildDateField(
                           label: 'DATE OF COOKSTOVE RECEIVED',
                           hint: 'Select Date',
@@ -587,52 +729,47 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           onTap: () => _selectDate(context, false),
                         ),
                         const SizedBox(height: 16),
-
                         _buildTextField(
                           label: 'WHERE RECEIVED (LOCATION)',
                           controller: _whereReceivedController,
                           hint: 'Enter Received Location',
                         ),
                         const SizedBox(height: 16),
-
                         _buildToggle(
                           label: 'Was the Consent Form Read to you?',
                           value: _readConsent,
-                          onChanged: (value) => setState(() => _readConsent = value),
+                          onChanged: (value) =>
+                              setState(() => _readConsent = value),
                         ),
                         const SizedBox(height: 8),
-
                         _buildToggle(
                           label: 'Did HH agree/ sign consent form?',
                           value: _signConsent,
-                          onChanged: (value) => setState(() => _signConsent = value),
+                          onChanged: (value) =>
+                              setState(() => _signConsent = value),
                         ),
                         const SizedBox(height: 8),
-
                         _buildToggle(
                           label: 'Was Stove delivered in good condition?',
                           value: _deliveredCondition,
-                          onChanged: (value) => setState(() => _deliveredCondition = value),
+                          onChanged: (value) =>
+                              setState(() => _deliveredCondition = value),
                         ),
                         const SizedBox(height: 16),
-
                         _buildGPSSection(),
                         const SizedBox(height: 16),
-
                         _buildImageCapture(
                           label: 'TAKE PHOTO OF STOVE',
                           image: _cookStoveImage,
                           onTap: () => _pickImage(true),
                         ),
                         const SizedBox(height: 16),
-
                         _buildImageCapture(
                           label: 'TAKE PHOTO OF STOVE AREA',
                           image: _cookStoveAreaImage,
                           onTap: () => _pickImage(false),
                         ),
                         const SizedBox(height: 24),
-
                         _buildSaveButton(),
                         const SizedBox(height: 24),
                       ],
@@ -687,7 +824,8 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
       ],
@@ -739,7 +877,8 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                     color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.calendar_today, color: Color(0xFF4CAF50), size: 18),
+                  child: const Icon(Icons.calendar_today,
+                      color: Color(0xFF4CAF50), size: 18),
                 ),
               ],
             ),
@@ -863,7 +1002,7 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
     required VoidCallback onTap,
   }) {
     final bool hasImage = image != null;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -876,7 +1015,7 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        
+
         // Image Preview Container with border
         GestureDetector(
           onTap: hasImage ? () => _showImagePreview(context, image) : null,
@@ -910,7 +1049,8 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+                              Icon(Icons.image,
+                                  size: 48, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
                               Text(
                                 'No image captured',
@@ -927,7 +1067,8 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                 if (hasImage)
                   IgnorePointer(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(8),
@@ -946,9 +1087,9 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Take Photo / Retake Button (full width)
         SizedBox(
           width: double.infinity,
@@ -960,14 +1101,15 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
           ),
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Remove Button (only show if image exists)
         if (hasImage) ...[
           SizedBox(
@@ -996,13 +1138,14 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                 foregroundColor: const Color(0xFF4CAF50),
                 side: const BorderSide(color: Color(0xFF4CAF50)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
           const SizedBox(height: 12),
         ],
-        
+
         // Info message
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1021,7 +1164,7 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
 
   void _showImagePreview(BuildContext context, File? localImage) {
     if (localImage == null) return;
-    
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1072,9 +1215,10 @@ class _AuditFormScreenState extends State<AuditFormScreen> {
                   color: Colors.white,
                 ),
               )
-            : const Text(
-                'Save',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            : Text(
+                _isEditMode ? 'Update' : 'Save',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
     );

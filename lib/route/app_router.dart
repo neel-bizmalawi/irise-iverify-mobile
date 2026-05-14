@@ -16,6 +16,7 @@ import 'package:irise/view/screen/splash.dart';
 import 'package:irise/view/screen/training_point_identification.dart';
 import 'package:irise/view/screen/audit_list.dart';
 import 'package:irise/view/screen/audit_form.dart';
+import 'package:irise/data/models/audit.dart' as audit_model;
 import 'package:irise/view/screen/settings.dart';
 import 'package:irise/providers/auth_provider.dart';
 
@@ -210,7 +211,14 @@ GoRouter createRouter(AuthProvider authProvider) {
         name: 'auditForm',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const AuditFormScreen(),
+          child: AuditFormScreen(
+            existingAudit: state.extra is audit_model.Audit
+                ? state.extra as audit_model.Audit
+                : null,
+            offlineId:
+                int.tryParse(state.uri.queryParameters['offlineId'] ?? ''),
+            auditId: int.tryParse(state.uri.queryParameters['auditId'] ?? ''),
+          ),
           transitionsBuilder: _slideUpTransition,
         ),
       ),

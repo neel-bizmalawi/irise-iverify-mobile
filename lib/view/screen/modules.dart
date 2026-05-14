@@ -26,10 +26,10 @@ class ModulesScreen extends StatelessWidget {
       'title': 'Monitoring',
       'icon': Icons.monitor_outlined,
     },
-    // {
-    //   'title': 'Audit Process',
-    //   'icon': Icons.people_outlined,
-    // },
+    {
+      'title': 'Audit Process',
+      'icon': Icons.people_outlined,
+    },
   ];
 
   @override

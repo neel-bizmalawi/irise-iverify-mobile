@@ -3223,6 +3223,35 @@ class DataService {
 
   /// POST /audit/audit_sync
   /// Syncs audit records to server
+  int? _extractAuditInsertId(dynamic responseData) {
+    const candidateKeys = [
+      'audit_id',
+      'auditId',
+      'id',
+      'insertedId',
+      'inserted_id',
+      'insertId',
+      'record_id',
+    ];
+    if (responseData is Map) {
+      for (final key in candidateKeys) {
+        final v = responseData[key];
+        if (v is int) return v;
+        if (v is String) {
+          final p = int.tryParse(v);
+          if (p != null) return p;
+        }
+        if (v is double) return v.toInt();
+      }
+      final nested = responseData['data'];
+      if (nested != null) return _extractAuditInsertId(nested);
+    }
+    if (responseData is List && responseData.isNotEmpty) {
+      return _extractAuditInsertId(responseData.first);
+    }
+    return null;
+  }
+
   Future<DataResponse<Map<String, dynamic>>> syncAuditToServer() async {
     try {
       developer.log('Syncing audit records to server...', name: 'DataService');
@@ -3284,10 +3313,16 @@ class DataService {
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             // Mark as synced in local database
-            if (audit.auditId != null) {
-              await auditRepo.markAsSynced(audit.auditId!);
+            if (audit.auditId != null || audit.offlineId != null) {
+              final serverAuditId = _extractAuditInsertId(response.data);
+              await auditRepo.markAsSynced(
+                auditId: audit.auditId,
+                offlineId: audit.offlineId,
+                serverAuditId: serverAuditId,
+              );
               syncedCount++;
-              developer.log('Synced audit record ${audit.auditId}',
+              developer.log(
+                  'Synced audit record auditId=${audit.auditId} offlineId=${audit.offlineId}',
                   name: 'DataService');
             }
           }

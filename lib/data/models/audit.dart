@@ -1,4 +1,5 @@
 class Audit {
+  final int? offlineId;
   final int? auditId;
   final String? householdName;
   final String? nationalId;
@@ -37,6 +38,7 @@ class Audit {
   final String? modifiedByName;
 
   Audit({
+    this.offlineId,
     this.auditId,
     this.householdName,
     this.nationalId,
@@ -85,6 +87,7 @@ class Audit {
     }
 
     return Audit(
+      offlineId: parseInt(json['offline_id']),
       auditId: parseInt(json['audit_id']),
       householdName: json['household_name'] as String?,
       nationalId: json['national_id'] as String?,
@@ -135,6 +138,7 @@ class Audit {
 
     return Audit(
       auditId: parseInt(map['audit_id']),
+      offlineId: parseInt(map['offline_id']),
       householdName: map['household_name'] as String?,
       nationalId: map['national_id'] as String?,
       phoneNumber: map['phone_number'] as String?,
@@ -174,7 +178,7 @@ class Audit {
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'audit_id': auditId,
       'household_name': householdName,
       'national_id': nationalId,
@@ -210,6 +214,10 @@ class Audit {
       'server_time': serverTime,
       'status': status,
     };
+    if (offlineId != null) {
+      map['offline_id'] = offlineId;
+    }
+    return map;
   }
 
   Map<String, dynamic> toJson() {
@@ -254,6 +262,7 @@ class Audit {
   }
 
   Audit copyWith({
+    int? offlineId,
     int? auditId,
     String? householdName,
     String? nationalId,
@@ -292,6 +301,7 @@ class Audit {
     String? modifiedByName,
   }) {
     return Audit(
+      offlineId: offlineId ?? this.offlineId,
       auditId: auditId ?? this.auditId,
       householdName: householdName ?? this.householdName,
       nationalId: nationalId ?? this.nationalId,
@@ -304,20 +314,24 @@ class Audit {
       hasCookstoveObserve: hasCookstoveObserve ?? this.hasCookstoveObserve,
       cookingMethodBefore: cookingMethodBefore ?? this.cookingMethodBefore,
       fuelUsedBefore: fuelUsedBefore ?? this.fuelUsedBefore,
-      otherCookingDeviceBefore: otherCookingDeviceBefore ?? this.otherCookingDeviceBefore,
+      otherCookingDeviceBefore:
+          otherCookingDeviceBefore ?? this.otherCookingDeviceBefore,
       paymentRequested: paymentRequested ?? this.paymentRequested,
       paymentRequestedBy: paymentRequestedBy ?? this.paymentRequestedBy,
-      trainingBeforeReceiving: trainingBeforeReceiving ?? this.trainingBeforeReceiving,
+      trainingBeforeReceiving:
+          trainingBeforeReceiving ?? this.trainingBeforeReceiving,
       readConset: readConset ?? this.readConset,
       signConsent: signConsent ?? this.signConsent,
       deliveredCondition: deliveredCondition ?? this.deliveredCondition,
-      dateOfCookstoveRecieved: dateOfCookstoveRecieved ?? this.dateOfCookstoveRecieved,
+      dateOfCookstoveRecieved:
+          dateOfCookstoveRecieved ?? this.dateOfCookstoveRecieved,
       whereReceived: whereReceived ?? this.whereReceived,
       whereTrained: whereTrained ?? this.whereTrained,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       photoPathCookStove: photoPathCookStove ?? this.photoPathCookStove,
-      photoPathCookStoveArea: photoPathCookStoveArea ?? this.photoPathCookStoveArea,
+      photoPathCookStoveArea:
+          photoPathCookStoveArea ?? this.photoPathCookStoveArea,
       remarks: remarks ?? this.remarks,
       sIsSync: sIsSync ?? this.sIsSync,
       createdDate: createdDate ?? this.createdDate,
