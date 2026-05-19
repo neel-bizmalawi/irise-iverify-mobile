@@ -386,6 +386,25 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4EA),
+      floatingActionButton: // Add Monitoring button
+          FloatingActionButton.extended(
+        heroTag: 'add_monitoring',
+        onPressed: () async {
+          final result = await context.push(AppRoutes.monitoringForm);
+          if (result == true) {
+            _loadMonitoringList(); // Reload list after successful save
+          }
+        },
+        backgroundColor: const Color(0xFF4CAF50),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Add Monitoring',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
       body: Stack(
         children: [
           // Green quarter-circle top-right
@@ -624,30 +643,6 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
                 );
               },
               child: const Icon(Icons.arrow_upward, color: Colors.black87),
-            ),
-          ),
-
-          // Add Monitoring button
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: FloatingActionButton.extended(
-              heroTag: 'add_monitoring',
-              onPressed: () async {
-                final result = await context.push(AppRoutes.monitoringForm);
-                if (result == true) {
-                  _loadMonitoringList(); // Reload list after successful save
-                }
-              },
-              backgroundColor: const Color(0xFF4CAF50),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Add Monitoring',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
             ),
           ),
         ],

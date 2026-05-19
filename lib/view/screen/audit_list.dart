@@ -539,26 +539,21 @@ class _AuditListScreenState extends State<AuditListScreen> {
               ],
             ),
           ),
-
-          // Add Audit button
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: FloatingActionButton.extended(
-              onPressed: () async {
-                final result = await context.push(AppRoutes.auditForm);
-                if (result == true) {
-                  _loadAudits(); // Reload list after successful save
-                }
-              },
-              backgroundColor: const Color(0xFF4CAF50),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Add Audit',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ),
         ],
       ),
+      floatingActionButton: // Add Audit button
+      FloatingActionButton.extended(
+          onPressed: () async {
+            final result = await context.push(AppRoutes.auditForm);
+            if (result == true) {
+              _loadAudits(); // Reload list after successful save
+            }
+          },
+          backgroundColor: const Color(0xFF4CAF50),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Add Audit',
+              style: TextStyle(color: Colors.white)),
+        ),
     );
   }
 }
