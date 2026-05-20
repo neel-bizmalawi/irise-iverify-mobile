@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "458858167668",
+    "project_id": "iverifycarbon-2e6de",
+    "storage_bucket": "iverifycarbon-2e6de.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458858167668:android:2ec5203f3068cd9dc5c021",
+        "android_client_info": {
+          "package_name": "com.irise.irise"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbN3bGRf0hFilLU34q00nmwpHxC7Sy8U0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
