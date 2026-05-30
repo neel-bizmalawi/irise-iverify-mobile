@@ -22,6 +22,9 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   final BeneficiaryRepository _beneficiaryRepo = BeneficiaryRepository();
   final DataService _dataService = DataService();
 
+  static const int _pageSize = 30;
+  bool _hasMore = true;
+  int _offset = 0;
   bool _showScrollToTop = false;
   bool _isLoading = true;
   bool _hasLoadedOnce = false;
@@ -29,11 +32,13 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
   List<Beneficiary> _filteredHouseholds = [];
   bool _allTrainingSitesSynced = true;
   int _unsyncedTrainingSitesCount = 0;
+  int _totalCount = 0;
+  String _currentSearchText = '';
 
   @override
   void initState() {
     super.initState();
-    _loadHouseholds();
+    _loadHouseholds(clear: true);
     _checkTrainingSitesStatus();
     _searchController.addListener(_filterHouseholds);
     _scrollController.addListener(_onScroll);
@@ -46,7 +51,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
     if (_hasLoadedOnce && ModalRoute.of(context)?.isCurrent == true) {
       developer.log('Screen became active, reloading households...',
           name: 'HouseholdScreen');
-      _loadHouseholds();
+      _loadHouseholds(clear: true);
       _checkTrainingSitesStatus();
     }
   }
@@ -56,12 +61,14 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
       final trainingSiteRepo = TrainingSiteRepository();
       final allSynced = await trainingSiteRepo.areAllTrainingSitesSynced();
       final unsyncedCount = await trainingSiteRepo.getUnsyncedCount();
+      final totalCount = await _beneficiaryRepo.getCount();
 
       if (!mounted) return;
 
       setState(() {
         _allTrainingSitesSynced = allSynced;
         _unsyncedTrainingSitesCount = unsyncedCount;
+        _totalCount = totalCount;
       });
 
       developer.log(
@@ -73,50 +80,57 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
     }
   }
 
-  Future<void> _loadHouseholds() async {
+  Future<void> _loadHouseholds({bool clear = false}) async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+
+    if (_isLoading && !clear) return;
+
+    if (clear) {
+      setState(() {
+        _isLoading = true;
+        _offset = 0;
+        _hasMore = true;
+        _households.clear();
+        _filteredHouseholds.clear();
+      });
+    } else {
+      setState(() => _isLoading = true);
+    }
+
     try {
       developer.log('Loading households from database...',
           name: 'HouseholdScreen');
-      final beneficiaries = await _beneficiaryRepo.getAll();
+
+      final String queryText = _searchController.text;
+      final String? query = queryText.toLowerCase().isNotEmpty
+          ? queryText.toLowerCase()
+          : null;
+
+      final beneficiaries = await _beneficiaryRepo.getPaged(
+          limit: _pageSize, offset: _offset, searchQuery: query);
+
       developer.log('Loaded ${beneficiaries.length} households',
           name: 'HouseholdScreen');
 
       if (!mounted) return;
 
-      // Sort: Not Synced (s_is_sync = 0) first, then Synced (s_is_sync = 1)
-      // Within NOT SYNCED group: sort by offline_id descending (newest first)
-      // Within SYNCED group: sort by beneficiary_id descending (newest first)
-      beneficiaries.sort((a, b) {
-        final aSync = a.sIsSync ?? 0;
-        final bSync = b.sIsSync ?? 0;
+      // Discard results if the search query has changed while the DB request was in flight.
+      if (_searchController.text != queryText) {
+        developer.log(
+            'Search query changed from "$queryText" to "${_searchController.text}", discarding results.',
+            name: 'HouseholdScreen');
+        return;
+      }
 
-        // If sync status is different, unsynced (0) comes first
-        if (aSync != bSync) {
-          return aSync.compareTo(bSync);
-        }
-
-        // If both are NOT SYNCED (s_is_sync = 0), sort by offline_id descending
-        if (aSync == 0 && bSync == 0) {
-          final aOfflineId = a.offlineId ?? 0;
-          final bOfflineId = b.offlineId ?? 0;
-          return bOfflineId
-              .compareTo(aOfflineId); // Higher offline_id first (newest)
-        }
-
-        // If both are SYNCED (s_is_sync = 1), sort by beneficiary_id descending
-        final aBeneficiaryId = a.beneficiaryId ?? 0;
-        final bBeneficiaryId = b.beneficiaryId ?? 0;
-        return bBeneficiaryId
-            .compareTo(aBeneficiaryId); // Higher beneficiary_id first (newest)
-      });
+      if (!_hasMore) return;
 
       setState(() {
-        _households = beneficiaries;
-        _filteredHouseholds = beneficiaries;
+        _households.addAll(beneficiaries);
+        _filteredHouseholds.addAll(beneficiaries);
         _isLoading = false;
         _hasLoadedOnce = true;
+        _offset += beneficiaries.length;
+        _hasMore = beneficiaries.length == _pageSize;
       });
 
       // Log first few for debugging
@@ -152,29 +166,28 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
 
   void _filterHouseholds() {
     if (!mounted) return;
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredHouseholds = _households;
-      } else {
-        _filteredHouseholds = _households.where((household) {
-          final firstName = (household.firstName ?? '').toLowerCase();
-          final lastName = (household.lastName ?? '').toLowerCase();
-          final fullName = '$firstName $lastName'.trim();
-          final nationalId = (household.nationalId ?? '').toLowerCase();
-          return fullName.contains(query) || nationalId.contains(query);
-        }).toList();
-      }
-    });
+
+    final queryText = _searchController.text;
+    if (queryText == _currentSearchText) {
+      return; // No change in search text, do nothing.
+    }
+    _currentSearchText = queryText;
+
+    _loadHouseholds(clear: true);
   }
 
   void _onScroll() {
     if (!mounted || !_scrollController.hasClients) return;
 
-    if (_scrollController.offset > 200 && !_showScrollToTop) {
+    /*if (_scrollController.offset > 200 && !_showScrollToTop) {
       setState(() => _showScrollToTop = true);
     } else if (_scrollController.offset <= 200 && _showScrollToTop) {
       setState(() => _showScrollToTop = false);
+    }*/
+
+    final threshold = _scrollController.position.maxScrollExtent - 200;
+    if (_scrollController.position.pixels >= threshold && _hasMore) {
+      _loadHouseholds();
     }
   }
 
@@ -412,7 +425,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
             name: 'HouseholdScreen');
 
         // Reload households
-        await _loadHouseholds();
+        await _loadHouseholds(clear: true);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -520,7 +533,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: _loadHouseholds,
+                        onTap: () => _loadHouseholds(clear: true),
                         child: Container(
                           width: 24,
                           height: 24,
@@ -595,7 +608,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${_filteredHouseholds.length}/${_households.length} Records Loaded',
+                        '${_filteredHouseholds.length}/$_totalCount Records Loaded',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -662,7 +675,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
 
                 // Household List
                 Expanded(
-                  child: _isLoading
+                  child: (_isLoading && ((_filteredHouseholds.isEmpty && _searchController.text.toLowerCase().isEmpty) || _households.isEmpty))
                       ? const Center(
                           child: CircularProgressIndicator(
                             valueColor: AlwaysStoppedAnimation<Color>(
@@ -726,7 +739,7 @@ class _HouseholdScreenState extends State<HouseholdScreen> {
                                       developer.log(
                                           'Returned from EditHouseholdScreen, reloading households...',
                                           name: 'HouseholdScreen');
-                                      await _loadHouseholds();
+                                      await _loadHouseholds(clear: true);
                                     },
                                     onSync: () => _syncHousehold(household),
                                   ),
